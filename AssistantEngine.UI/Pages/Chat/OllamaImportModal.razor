@@ -1,0 +1,88 @@
+﻿@page "/models"
+@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Implementation.Ollama
+@inject OllamaImportService ModelService
+
+<!-- Modal trigger button -->
+<div class="modal-backdrop blur  @(isDownloadModalOpen ? "show" : "")"></div>
+<!-- Modal -->
+<div id="ollama-import-modal" class="custom-modal @(isDownloadModalOpen ? "show" : "")">
+    <div class="custom-modal-content">
+        <div class="custom-modal-header">
+            <h3 class="ollama-model-download-h">Download Ollama Models</h3>
+            <button class="close-btn" @onclick="CloseDownloadModal"><i class="fi-br-cross"></i></button>
+        </div>
+
+        <div class="custom-modal-body">
+            @if (models == null)
+            {
+                <p>Loading…</p>
+            }
+            else
+            {
+                <ul class="model-list">
+                    @foreach (var m in models)
+                    {
+                        <li class="@(m.IsExpanded ? "isExpanded" : "")">
+                            <span @onclick="() => ToggleDropdown(m)" class="model-title">
+                                <b>@m.Name</b>
+                                <span class="arrow">
+                                    @((MarkupString)(m.IsExpanded
+                                                                ? "<i class='fi fi-br-angle-up'></i>"
+                                                                : "<i class='fi fi-br-angle-down'></i>"))
+                        </span>
+                            </span>
+
+                            @if (m.IsExpanded && m.Dropdowns?.Any() == true)
+                            {
+                                <div class="model-desc">@m.Description</div>
+                                <h5 class="version-text">Versions</h5>
+                                <ul class="dd-list">
+                                    @foreach (var d in m.Dropdowns)
+                                    {
+                                        <li>@((MarkupString)d)</li>
+                                    }
+                                </ul>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<OllamaImportModel>? models;
+  
+    private bool isDownloadModalOpen = false;
+
+    public void OpenDownloadModal()
+    {
+        isDownloadModalOpen = true;
+        StateHasChanged();
+    }
+
+    public void CloseDownloadModal()
+    {
+        isDownloadModalOpen = false;
+        StateHasChanged();
+    }
+
+    private void ToggleDropdown(OllamaImportModel model) =>
+        model.IsExpanded = !model.IsExpanded;
+  
+
+ /*  
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            models = await ModelService.GetModelsAsync();
+        }
+      
+    }*/ protected override async Task OnInitializedAsync()
+    {
+        models = await ModelService.GetModelsAsync();
+    }
+}

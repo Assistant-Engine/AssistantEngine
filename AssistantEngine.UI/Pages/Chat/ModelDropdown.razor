@@ -1,0 +1,212 @@
+﻿@using AssistantEngine.Factories
+@using OllamaSharp
+@inject ChatClientState ClientState;
+@using OllamaSharp.Models
+@inject IJSRuntime JSRuntime
+@using AssistantEngine.UI.Services
+@inject IAppHealthService Health
+
+@implements IDisposable
+
+<div class="chat-model-container">
+    <div id="current-model" class="model-selector" @onclick="ToggleDropdown">
+    @if (loading)
+    {
+        <p>Loading models…</p>
+        }
+        else if (!string.IsNullOrEmpty(_loadError))
+        {
+            <p class="text-danger">@_loadError</p>
+        }
+    else if (models?.Count > 0)
+    {
+       
+
+            <span class="model-dd-selected">@SelectedModel</span>
+            <span class="arrow">
+                @if (dropdownOpen)
+                {
+                    <i class="fi fi-br-angle-up"></i>
+                }
+                else
+                {
+                    <i class="fi fi-br-angle-down"></i>
+                }
+
+            </span>
+
+        
+     
+
+            <div class="dropdown-container model-dropdown @(dropdownOpen ? "show" : "hidden")">
+                <button type="button" id="import-new-ollama-btn" @onclick="() => OnBrowseModelsClick()" class=" btn btn-primary" data-bs-toggle="modal" data-bs-target="#ollama-import-modal">
+                    Download New Model  <i class="fi-br-download"></i>
+                </button>
+                @foreach (var m in models.OrderBy(abs=>abs.Name))
+                {
+                    bool running = running_models.Exists(x => m.Name == x.Name && x.Digest == m.Digest);
+                    <div class="model-dropdown-item@(running ? " running" : "")"
+                         @onclick="() => SelectModel(m)">
+                        <span class="chat-model-name">@m.Name</span>
+                        <span class="chat-model-description"> @FormatBytes(m.Size)</span>
+                    </div>
+                }
+            </div>
+   
+    }
+    else
+    {
+        <p>No models found.</p>
+    }
+</div></div>
+
+
+@code {
+    
+    [Parameter] public EventCallback OpenModels { get; set; }
+    private string? _loadError;
+    // wherever you want to trigger it, e.g. a button or menu action:
+    private async Task OnBrowseModelsClick() => await OpenModels.InvokeAsync();
+
+    private bool isJsReferenceReady;
+    private string dropdownId => "current-model"; // Generate a unique ID based on model
+    private string FormatBytes(long bytes)
+    {
+        if (bytes >= 1_000_000_000)
+            return $"{bytes / 1_000_000_000.0:F2} GB";
+        if (bytes >= 1_000_000)
+            return $"{bytes / 1_000_000.0:F2} MB";
+        if (bytes >= 1_000)
+            return $"{bytes / 1_000.0:F2} KB";
+        return $"{bytes} B";
+    }
+
+    IOllamaApiClient Client => ClientState.OllamaClient;
+    private bool dropdownOpen = false;
+
+    private async Task ToggleDropdown()
+    {
+        if (!isJsReferenceReady || !string.IsNullOrEmpty(_loadError))
+            return;
+
+        dropdownOpen = !dropdownOpen;
+        await JSRuntime.InvokeVoidAsync("GLOBAL.SetOpenDropdownId", dropdownOpen ? dropdownId : null);
+    }
+
+    // NEW: centralize list loading
+    private async Task LoadModelsAsync(CancellationToken token)
+    {
+        var list = await Client.ListLocalModelsAsync(token);
+        var runningList = await Client.ListRunningModelsAsync(token);
+
+        running_models = runningList.ToList();
+        models = list.ToList();
+
+        // keep SelectedModel valid if the previously selected one no longer exists
+        if (!string.IsNullOrWhiteSpace(SelectedModel) && models.All(m => m.Name != SelectedModel))
+            SelectedModel = models.FirstOrDefault()?.Name ?? SelectedModel;
+    }
+
+    // NEW: public refresh you can call from parent after a download
+    public async Task RefreshAsync()
+    {
+        loading = true;
+        _loadError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
+            await LoadModelsAsync(linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _loadError = "Model list request timed out.";
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Couldn't fetch models: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+
+    private async Task SelectModel(Model m)
+    {
+      
+        ClientState.Config.AssistantModel.ModelId = m.Name;
+        ClientState.OllamaClient.SelectedModel = m.Name;
+
+        await OnSelect.InvokeAsync(m);
+       await InvokeAsync(StateHasChanged);
+    }
+
+    private List<Model> models;
+    private List<RunningModel> running_models;
+    private bool loading;
+  
+    private readonly CancellationTokenSource cts = new();
+
+    [Parameter] public string SelectedModel { get; set; }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var lDotNetReference = DotNetObjectReference.Create(this);
+            await JSRuntime.InvokeVoidAsync("GLOBAL.SetDotnetReference", dropdownId, lDotNetReference);
+            isJsReferenceReady = true;
+
+            var ollama = Health.Get(HealthDomain.Ollama);
+            if (ollama.Level != HealthLevel.Healthy)
+            {
+                _loadError = ollama.Error ?? "Ollama server not reachable.";
+                return;
+            }
+
+            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
+            await LoadModelsAsync(linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _loadError = "Model list request timed out.";
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Couldn't fetch models: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    public void Dispose()
+    {
+        _ = JSRuntime.InvokeVoidAsync("GLOBAL.RemoveDotnetReference", dropdownId);
+        cts.Cancel();
+    }
+    [Parameter] public EventCallback<Model> OnSelect { get; set; }
+
+
+    [JSInvokable("HandleOutsideClick")]
+    public void HandleOutsideClick(string dropdownId)
+    {
+        if (this.dropdownId == dropdownId)
+        {
+            dropdownOpen = false;
+            StateHasChanged(); // Re-render the component to update the state
+        }
+    }
+  
+}

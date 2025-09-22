@@ -1,0 +1,83 @@
+{
+  "Default": false,
+  "Name": "Assistant Lite (Remote)",
+  "Version": 1.0,
+  "Id": "Assistant Lite (Remote)",
+  "ModelOptions": [
+    {
+      "Key": "Assistant",
+      "Label": "Assistant Model",
+      "Options": {
+        "ModelId": "qwen3:30b-a3b",
+        "Temperature": 0.7,
+        "TopP": 0.95,
+        "TopK": 10,
+        "AllowMultipleToolCalls": true
+      }
+    },
+    {
+      "Key": "Embedding",
+      "Label": "Embedding Model",
+      "Options": {
+        "ModelId": "all-minilm:latest"
+      }
+    },
+    {
+      "Key": "Descriptor",
+      "Label": "Descriptor Model",
+      "Options": {
+        "ModelId": "mistral:latest"
+      }
+    },
+    {
+      "Key": "Correction",
+      "Label": "Correction Model",
+      "Options": {
+        "ModelId": "qwen3:30b-a3b"
+      }
+    },
+    {
+      "Key": "Text2SQL",
+      "Label": "Text To SQL Model",
+      "Options": {
+        "ModelId": "qwen3:30b-a3b"
+      }
+    },
+    {
+      "Key": "MiniTask",
+      "Label": "Mini Task Model",
+      "Options": {
+        "ModelId": "qwen3:0.6b"
+      }
+    }
+  ],
+
+  "ModelProvider": "Ollama",
+  "ModelProviderUrl": "http://178.196.27.11:11434",
+  "DescribeDatabaseWithModel": true,
+  "SystemPrompt": "You are a specialized assistant that answers questions using retrieved information. Format your answer in simple Markdown.",
+  "VectorStore": "local",
+  "IngestionPaths": [
+  ],
+  "Databases": [
+  ],
+  "EnabledFunctions": [
+    "SearchDatabase",
+    "SearchCode",
+    "SearchAsync",
+    "GetWeather",
+    "GetKnownDatabases",
+    "ExecuteSQL",
+    "SearchDatabaseSchema",
+    "WebSearch",
+    "Search",
+    "PowerShellScript",
+    "ListFileEntries",
+    "ReadFile",
+    "WriteFile",
+    "DeleteFile"
+  ],
+  "Description": "Welcome to Assistant Engine…",
+  "EnableThinking": true,
+  "PersistThoughtHistory": true
+}

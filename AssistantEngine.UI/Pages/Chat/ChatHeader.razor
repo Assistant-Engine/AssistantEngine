@@ -1,0 +1,61 @@
+@using AssistantEngine.Factories
+@using AssistantEngine.UI.Services.Models
+@inject ChatClientState ClientState;
+<div class="chat-header-container main-background-gradient">
+    <div class="chat-header-controls">
+        <button class="btn-default" @onclick="@OnNewChat">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="new-chat-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New chat
+        </button>
+    </div>
+
+    <ModelDropdown @ref="modelDD"  OpenModels="OpenModalRequested" OnSelect="@HandleModelSelected" SelectedModel="@ClientState.OllamaClient.SelectedModel" />
+    <ModelSelector @ref="modelSelectDD" OnSelect="@HandleModelAssistantSelected" /> 
+    <button id="toggleThemeBtn" class="toggle-theme-btn btn"><i class="fi fi-br-sun"></i></button>
+    <button id="settings-btn" class="btn btn-sm btn-outline-secondary"
+            @onclick="OnToggleSidebar">
+        @(IsSidebarVisible ? "Hide Options" : "Show Options")
+    </button>
+    <button id="open-model-chat-button" @onclick="() => OpenModalRequested.InvokeAsync()">Open Models</button>
+
+</div>
+
+@code {
+    private ModelDropdown modelDD;  // Reference to the child component
+    private ModelSelector modelSelectDD;  // Reference to the child component
+    [Parameter] public EventCallback OnToggleSidebar { get; set; }
+    [Parameter] public bool IsSidebarVisible { get; set; }
+    [Parameter]
+    public EventCallback OnNewChat { get; set; }
+
+    /// Parent consumer of model selections
+    [Parameter]
+    public EventCallback OnStateSelected { get; set; }
+
+    [Parameter] public EventCallback OpenModalRequested { get; set; }
+
+    // Handle dropdown state changes from child components
+
+    [Parameter]
+    public EventCallback OnStateChange { get; set; }
+    private async Task HandleModelSelected(OllamaSharp.Models.Model model)
+    {
+
+        await OnStateChange.InvokeAsync();
+        // e.g. set your currentModel variable, reset chat history, etc.
+        // then bubble the event up if needed:
+        // await OnModelSelected.InvokeAsync(model);
+    }
+    public Task RefreshModelsAsync() => modelDD?.RefreshAsync() ?? Task.CompletedTask;
+    private async Task HandleModelAssistantSelected(AssistantConfig model)
+    {
+
+        await OnStateChange.InvokeAsync();
+        // e.g. set your currentModel variable, reset chat history, etc.
+        // then bubble the event up if needed:
+        // await OnModelSelected.InvokeAsync(model);
+    }
+
+}

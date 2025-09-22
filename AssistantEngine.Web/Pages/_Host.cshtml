@@ -1,0 +1,35 @@
+@page "/"
+@namespace AssistantEngine.UI.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="~/" />
+
+    <!-- Your CSS -->
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <link rel="stylesheet" href="_content/AssistantEngine.UI/app.css" />
+    <link rel="stylesheet" href="_content/AssistantEngine.UI/lib/toastr/toastr.min.css" />
+    <link rel="stylesheet" href="_content/AssistantEngine.UI/lib/prism/prism.css" />
+    <link href="/icons/css/uicons-bold-rounded.css" rel="stylesheet" />
+
+    <!-- Optional JS libraries -->
+    <script src="_content/AssistantEngine.UI/lib/jquery/jquery.js"></script>
+    <script src="_content/AssistantEngine.UI/lib/toastr/toastr.min.js"></script>
+    <script src="_content/AssistantEngine.UI/lib/prism/prism.js"></script>
+    <script src="_content/AssistantEngine.UI/dropdown.js"></script>
+</head>
+<body>
+    <component type="typeof(AssistantEngine.UI.App)" render-mode="ServerPrerendered" />
+    @*<script src="_framework/blazor.web.js"></script> for web assembly mode*@
+    <script src="_framework/blazor.server.js"></script>
+    <!-- Blazor bootstrap -->
+   
+</body>
+</html>

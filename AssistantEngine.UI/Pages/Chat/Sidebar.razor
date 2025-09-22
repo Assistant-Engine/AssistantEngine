@@ -1,0 +1,43 @@
+﻿@* /Shared/Sidebar.razor *@
+@using AssistantEngine.UI.Services.Implementation.Models.Chat
+@using AssistantEngine.UI.Services.Models.Chat
+@using Microsoft.AspNetCore.Components.Routing
+
+<aside class="sidebar">
+    <div class="sidebar-logo">
+        <a href="">
+            <img src="_content/AssistantEngine.UI/img/logo.png"  id="chat-logo-main" />
+            <span id="sidebarText">Assistant Engine</span>
+        </a>
+    </div>
+
+    <nav class="sidebar-nav">
+        
+        <ChatHistoryList CurrentSession="@CurrentSession"
+  CurrentSessionChanged="@CurrentSessionChanged" />
+        @**<NavLink href="" Match="NavLinkMatch.All" class="nav-link">
+            <i class="fas fa-home"></i><span>Chat</span>
+            
+        </NavLink>
+     
+        <NavLink href="dashboard" class="nav-link">
+            <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+        </NavLink>
+        <NavLink href="reports" class="nav-link">
+            <i class="fas fa-chart-line"></i><span>Reports</span>
+        </NavLink>*@
+    </nav>
+
+    <div class="sidebar-footer">
+		<button class="btn btn-sidebar-footer" @onclick="() => OpenSettingsModalRequested.InvokeAsync()">
+			<i class="fi fi-br-settings"
+			   title="Folder containing your model JSON definitions."></i>
+			   Advanced Settings
+		</button>
+    </div>
+</aside>
+@code {
+	[Parameter] public EventCallback OpenSettingsModalRequested { get; set; }
+    [Parameter] public ChatSession? CurrentSession { get; set; }
+    [Parameter] public EventCallback<ChatSession> CurrentSessionChanged { get; set; }
+}

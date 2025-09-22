@@ -1,0 +1,52 @@
+@using AssistantEngine.Factories
+@inject ChatClientState chatClientState
+
+@* wrap your existing markup *@
+@if (Visible)
+{
+    <div class="loader-outer page-width">
+        <div class="lds-ellipsis">
+            <div></div><div></div><div></div><div></div>
+        </div>
+        @if (!string.IsNullOrEmpty(Message))
+        {
+            <p class="spinner-message">@Message</p>
+        }
+    </div>
+  
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public string? Message { get; set; }
+
+    protected override void OnInitialized()
+    {
+        chatClientState.OnLoaderMessage += (v, m) =>
+        {
+            Visible = v;
+            Message = m;
+            InvokeAsync(StateHasChanged);
+        };
+    }
+
+
+
+    // optional helper for parent via @ref
+    public void Toggle(bool show, string? message = null)
+    {
+        Visible = show;
+        Message = message;
+        StateHasChanged();
+    }
+
+    [Parameter] public EventCallback<SpinnerToggleEventArgs> OnToggle { get; set; }
+
+    public async Task ToggleAsync(bool show, string? message = null)
+    {
+        Visible = show;
+        Message = message;
+    
+        StateHasChanged();
+    }
+}

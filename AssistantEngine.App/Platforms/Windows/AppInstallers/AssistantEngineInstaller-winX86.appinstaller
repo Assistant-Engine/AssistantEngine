@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AppInstaller
+  Uri="https://echo-ed.tech/downloads/AssistantEngineInstaller-winX32.appinstaller"
+  Version="0.0.1.0"
+  xmlns="http://schemas.microsoft.com/appx/appinstaller/2018">
+
+  <MainPackage
+    Name="AssistantEngine.App"
+    Publisher="CN=AssistantEngine"
+    Version="0.0.1.0"
+    ProcessorArchitecture="x86"
+    Uri="https://echo-ed.tech/downloads/AssistantEngine.App_0.0.1.0_x86.msix" />
+
+  <UpdateSettings>
+    <OnLaunch
+      HoursBetweenUpdateChecks="6"
+      ShowPrompt="true"
+      UpdateBlocksActivation="false" />
+  </UpdateSettings>
+</AppInstaller>

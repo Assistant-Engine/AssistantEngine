@@ -1,0 +1,155 @@
+@using System.Runtime.CompilerServices
+@using System.Text.RegularExpressions
+@using System.Linq
+
+@if (Message.Role == ChatRole.User)
+{
+    <div class="user-message">
+        @Message.Text
+    </div>
+}
+else if (Message.Role == ChatRole.Assistant)
+{
+    var texts = (Message.Contents ?? Enumerable.Empty<AIContent>())
+        .OfType<TextContent>()
+        .Select(t => t.Text)
+        .Where(s => !string.IsNullOrWhiteSpace(s))
+        .ToList();
+
+    bool hasThoughts = (Thoughts ?? Enumerable.Empty<string>()).Any(t => !string.IsNullOrWhiteSpace(t));
+    bool hasText = texts.Any(t => !string.IsNullOrWhiteSpace(Regex.Replace(t, @"<think>[\s\S]*?</think>", "", RegexOptions.Singleline)));
+    bool hasCits = (citations?.Any() ?? false);
+    bool hasSearch = (Message.Contents ?? Enumerable.Empty<AIContent>())
+                        .OfType<FunctionCallContent>()
+                        .Any(f => f.Name == "Search");
+
+    if (hasThoughts || hasText || hasCits || hasSearch)
+    {
+        <div class="assistant-message">
+            <div>
+                <div class="assistant-message-icon">
+                    <svg class="icon"><use xlink:href="#call-center" /></svg>
+                </div>
+            </div>
+            <div class="assistant-message-header">Assistant</div>
+            <div class="assistant-message-text">
+
+                @* render ALL thoughts once *@
+                @foreach (var thought in (Thoughts ?? Enumerable.Empty<string>())
+                        .Where(t => !string.IsNullOrWhiteSpace(t)))
+                {
+                    var lines = thought
+                    .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None)
+                    .Where(l => !string.IsNullOrWhiteSpace(l))
+                    .ToArray();
+
+                    <think>
+                        <span class="preview">@lines.FirstOrDefault()</span>
+                        @if (lines.Length > 1)
+                        {
+                            <span>…</span>
+                            <span class="more" style="display:none">
+                                @for (int i = 1; i < lines.Length; i++)
+                                {
+                                    @lines[i]
+                                    <br />
+                 }
+                            </span>
+                            <span class="toggle">Show more</span>
+                        }
+                    </think>
+                }
+
+                @* render each text content (without duplicating thoughts) *@
+                @foreach (var t in texts)
+                {
+                    <assistant-message markdown="@t"></assistant-message>
+                }
+
+                @* render any Search tool calls *@
+                @foreach (var fcc in (Message.Contents ?? Enumerable.Empty<AIContent>())
+                        .OfType<FunctionCallContent>()
+                        .Where(f => f.Name == "Search"))
+                {
+                    var hasPhrase = fcc.Arguments?.TryGetValue("searchPhrase", out var searchPhraseObj) == true;
+                    var searchPhrase = hasPhrase ? false : false;// searchPhraseObj?.ToString() : null;
+
+                    <div class="assistant-search">
+                        <div class="assistant-search-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                            </svg>
+                        </div>
+                        <div class="assistant-search-content">
+                            Searching:
+                            <span class="assistant-search-phrase">@searchPhrase</span>
+                            @if (fcc.Arguments?.TryGetValue("filenameFilter", out var filenameObj) is true
+                                            && filenameObj is string filename && !string.IsNullOrEmpty(filename))
+                            {
+                                <text> in </text>
+                
+                                <span class="assistant-search-phrase">@filename</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @foreach (var citation in citations ?? Enumerable.Empty<(string File, int? Page, string Quote)>())
+                {
+                    <ChatCitation File="@citation.File" PageNumber="@citation.Page" Quote="@citation.Quote" />
+                }
+            </div>
+        </div>
+    }
+}
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;"><symbol id="robot" viewBox="0 0 100 100"><title>robot</title><path d="m26.666 16.667c0-3.684-2.982-6.667-6.666-6.667-3.68 0-6.666 2.983-6.666 6.667 0 2.796 1.725 5.183 4.166 6.172v20.495h5v-20.495c2.441-.988 4.166-3.374 4.166-6.172z" /><path d="m86.667 16.667c0-3.684-2.982-6.667-6.667-6.667-3.679 0-6.667 2.983-6.667 6.667 0 2.796 1.726 5.183 4.167 6.172v20.495h5v-20.493c2.441-.99 4.167-3.376 4.167-6.174z" /><path d="m70 46.667c-12.344 4.278-26.654 4.61-40 0-3.092 5.118-5 12.188-5 20.001 0 3.682 11.188 6.666 25 6.666 13.806 0 25-2.984 25-6.666 0-7.813-1.907-14.883-5-20.001zm-32.5 20.001c-2.303 0-4.166-1.863-4.166-4.168 0-2.301 1.863-4.166 4.166-4.166s4.166 1.865 4.166 4.166c0 2.305-1.863 4.168-4.166 4.168zm25 0c-2.305 0-4.167-1.863-4.167-4.168 0-2.301 1.862-4.166 4.167-4.166s4.167 1.865 4.167 4.166c0 2.305-1.862 4.168-4.167 4.168z" /><path d="m50 23.334c-22.09 0-40 19.396-40 43.334 0 12.891 17.91 23.332 40 23.332 22.097 0 40-10.441 40-23.332 0-23.938-17.903-43.334-40-43.334zm0 60c-19.644 0-33.334-8.783-33.334-16.666 0-20.219 14.953-36.668 33.334-36.668 18.379 0 33.333 16.449 33.333 36.668 0 7.883-13.687 16.666-33.333 16.666z" /></symbol><symbol id="robot-1" viewBox="0 0 64 64"><title>robot-1</title><path d="m49.26148 17.5001h-34.52294c-2.21149 0-4.00266 1.78997-4.00266 3.99997v25.49983c0 2.20995 1.79117 3.99997 4.00266 3.99997h34.52294c2.21149 0 4.00266-1.79003 4.00266-3.99997v-25.49983c0-2.21001-1.79117-3.99997-4.00266-3.99997zm-31.27078 13.74991c0-3.30998 2.69179-5.99996 6.00399-5.99996 7.94678.27954 7.94474 11.72157-.0001 11.99992-3.3121 0-6.00389-2.68999-6.00389-5.99997zm21.01396 11.99992h-14.00931c-.55035 0-1.00066-.45001-1.00066-.99999s.45031-.99999 1.00066-.99999h14.00931c1.31011.02384 1.31801 1.9745 0 1.99999zm1.00066-5.99996c-3.3122 0-6.00399-2.68998-6.00399-5.99996.27973-7.94144 11.72944-7.93941 12.00798.0001 0 3.30988-2.6918 5.99986-6.00399 5.99986z" /><path d="m3.9814 34.24998c0 3.20994 1.96133 5.96993 4.75316 7.12996v-14.25991c-2.79183 1.15997-4.75316 3.91996-4.75316 7.12996z" /><path d="m55.26547 27.12003v14.25991c6.28934-2.56159 6.28647-11.70042 0-14.25991z" /><path d="m40.77586 52.99986h-17.73181l-2.11139 5.64993c-.25922.6336.26089 1.36994.94065 1.35001-.00002.00002 20.25342.00002 20.25342.00002.34025 0 .65046-.17004.83057-.44.19013-.28003.23013-.63.10004-.94z" /><path d="m30.99935 12.63014v2.86998h2.00133v-2.86998c1.93128-.45001 3.38225-2.17998 3.38225-4.24997 0-2.42003-1.97134-4.37998-4.38292-4.37998-5.19497.10383-5.99951 7.37971-1.00066 8.62995z" /><path d="m27.99735 31.25001c-.16212-5.28746-7.84398-5.28624-8.00532.00009.16217 5.28736 7.84394 5.28614 8.00532-.00009z" /><path d="m40.00533 27.25003c-5.291.16202-5.28979 7.83867.00009 7.99995 5.29092-.16206 5.28969-7.83871-.00009-7.99995z" /></symbol><symbol id="chat" viewBox="0 0 64 64"><title>chat</title><path clip-rule="evenodd" d="m2 14c0-6.62742 5.37258-12 12-12h36c6.6274 0 12 5.37258 12 12v28c0 6.6274-5.3726 12-12 12h-10.0925l-6.4023 7.317c-.3798.434-.9285.683-1.5052.683s-1.1254-.249-1.5052-.683l-6.4023-7.317h-10.0925c-6.62742 0-12-5.3726-12-12zm30 0c.9337 0 1.7432.6461 1.9502 1.5565l1.1066 4.8664c.5118 2.2509 2.2694 4.0085 4.5203 4.5203l4.8664 1.1066c.9104.207 1.5565 1.0165 1.5565 1.9502s-.6461 1.7432-1.5565 1.9502l-4.8664 1.1066c-2.2509.5118-4.0085 2.2694-4.5203 4.5203l-1.1066 4.8664c-.207.9104-1.0165 1.5565-1.9502 1.5565s-1.7432-.6461-1.9502-1.5565l-1.1066-4.8664c-.5118-2.2509-2.2694-4.0085-4.5203-4.5203l-4.8664-1.1066c-.9104-.207-1.5565-1.0165-1.5565-1.9502s.6461-1.7432 1.5565-1.9502l4.8664-1.1066c2.2509-.5118 4.0085-2.2694 4.5203-4.5203l1.1066-4.8664c.207-.9104 1.0165-1.5565 1.9502-1.5565z" fill="rgb(0,0,0)" fill-rule="evenodd" /></symbol><symbol id="ai" viewBox="0 0 32 32"><title>ai</title><path d="m13.294 7.436.803 2.23c.892 2.475 2.841 4.424 5.316 5.316l2.23.803c.201.073.201.358 0 .43l-2.23.803c-2.475.892-4.424 2.841-5.316 5.316l-.803 2.23c-.073.201-.358.201-.43 0l-.803-2.23c-.892-2.475-2.841-4.424-5.316-5.316l-2.23-.803c-.201-.073-.201-.358 0-.43l2.23-.803c2.475-.892 4.424-2.841 5.316-5.316l.803-2.23c.072-.202.357-.202.43 0z" /><path d="m23.332 2.077.407 1.129c.452 1.253 1.439 2.24 2.692 2.692l1.129.407c.102.037.102.181 0 .218l-1.129.407c-1.253.452-2.24 1.439-2.692 2.692l-.407 1.129c-.037.102-.181.102-.218 0l-.407-1.129c-.452-1.253-1.439-2.24-2.692-2.692l-1.129-.407c-.102-.037-.102-.181 0-.218l1.129-.407c1.253-.452 2.24-1.439 2.692-2.692l.407-1.129c.037-.103.182-.103.218 0z" /><path d="m23.332 21.25.407 1.129c.452 1.253 1.439 2.24 2.692 2.692l1.129.407c.102.037.102.181 0 .218l-1.129.407c-1.253.452-2.24 1.439-2.692 2.692l-.407 1.129c-.037.102-.181.102-.218 0l-.407-1.129c-.452-1.253-1.439-2.24-2.692-2.692l-1.129-.407c-.102-.037-.102-.181 0-.218l1.129-.407c1.253-.452 2.24-1.439 2.692-2.692l.407-1.129c.037-.102.182-.102.218 0z" /></symbol><symbol id="bot" viewBox="0 0 128 128"><title>bot</title><path d="M128,0H0V128H128Z" style="fill:none" /><circle cx="48" cy="64" r="8" /><circle cx="80" cy="64" r="8" /><path d="M112,52.1V50.94A19,19,0,0,0,93.06,32H69V28.48a9,9,0,1,0-10,0V32H34.94A19,19,0,0,0,16,50.94V52.1A5,5,0,0,0,12,57V69a5,5,0,0,0,5,5,3.87,3.87,0,0,0,.49,0A46.87,46.87,0,0,0,62.79,109h2.42a46.87,46.87,0,0,0,45.3-35,3.87,3.87,0,0,0,.49,0,5,5,0,0,0,5-5V57A5,5,0,0,0,112,52.1ZM102,62.21A36.83,36.83,0,0,1,65.21,99H62.79A36.83,36.83,0,0,1,26,62.21V50.94A9,9,0,0,1,34.94,42H93.06A9,9,0,0,1,102,50.94Z" /><path d="M71.74,78H56a2,2,0,0,0-2,2.39A9.86,9.86,0,0,0,63.6,88h.57a9.87,9.87,0,0,0,9.54-7.61A2,2,0,0,0,71.74,78Z" /></symbol><symbol id="call-center" viewBox="0 0 134 134"><title>call-center</title><path d="m30.08 89.583h-5.815c-4.225 0-8.277-1.678-11.265-4.666s-4.667-7.041-4.667-11.266v-7.719c0-4.225 1.679-8.278 4.667-11.265.297-.298.604-.582.922-.853 6.806-22.683 27.858-39.231 52.745-39.231 24.886 0 45.938 16.548 52.745 39.231.317.271.625.555.922.853 2.987 2.987 4.666 7.04 4.666 11.265v7.719c0 4.225-1.679 8.278-4.666 11.266-.365.364-.744.709-1.139 1.033-.033.253-.089.507-.171.759-4.442 13.618-14.052 24.91-26.511 31.551-2.03 1.082-4.555.313-5.637-1.717-1.082-2.029-.313-4.555 1.717-5.637 8.862-4.723 16.028-12.217 20.336-21.323h-5.675c-7.074 12.941-20.813 21.726-36.587 21.726-15.775 0-29.514-8.785-36.587-21.726zm-5.815-39.583h5.653c7.024-13.104 20.853-22.025 36.749-22.025s29.724 8.921 36.749 22.025h5.653c-7.425-15.987-23.628-27.083-42.402-27.083-18.775 0-34.977 11.096-42.402 27.083zm10.368 10.402c-.846 2.934-1.3 6.035-1.3 9.24 0 18.397 14.936 33.333 33.334 33.333 18.397 0 33.333-14.936 33.333-33.333 0-1.541-.105-3.058-.308-4.544-21.569.841-28.438-4.502-37.329-10.845-12.361 5.485-22.17 6.297-27.73 6.149z" /></symbol><symbol id="ai-assistant" viewBox="0 0 32 32"><title>ai-assistant</title><path d="m24.292 10.984h-7.292v-4.208c.879-.386 1.494-1.261 1.494-2.282 0-1.377-1.117-2.494-2.494-2.494s-2.494 1.117-2.494 2.494c0 1.021.615 1.896 1.494 2.282v4.208h-7.292c-1.105 0-2 .895-2 2v15.016c0 1.105.895 2 2 2h16.583c1.105 0 2-.895 2-2v-15.016c.001-1.105-.895-2-1.999-2zm-5.365 6.099c0-.552.447-1 1-1s1 .448 1 1v.462c0 .552-.447 1-1 1s-1-.448-1-1zm-7.854 0c0-.552.447-1 1-1s1 .448 1 1v.462c0 .552-.447 1-1 1s-1-.448-1-1zm9.935 6.378c-1.365.928-3.144 1.439-5.008 1.439s-3.643-.511-5.008-1.439c-.456-.311-.575-.932-.265-1.389.311-.455.935-.575 1.39-.264 1.036.705 2.415 1.093 3.883 1.093s2.847-.388 3.883-1.093c.456-.311 1.079-.191 1.39.264.31.457.191 1.079-.265 1.389z" /></symbol><symbol id="bot-1" viewBox="0 0 128 128"><title>bot-1</title><path d="M109.2,104.25H90.75l-11.84,5.42A1.35,1.35,0,0,1,77,108.44v-25a5.8,5.8,0,0,1,5.8-5.8h26.4a5.8,5.8,0,0,1,5.8,5.8v15A5.8,5.8,0,0,1,109.2,104.25Z" /><path d="M93.06,24H69V14.8A2.8,2.8,0,0,0,66.2,12H61.8A2.8,2.8,0,0,0,59,14.8V24H34.93A18.94,18.94,0,0,0,16,42.93V54.21a46.77,46.77,0,0,0,43.82,46.7,2.81,2.81,0,0,0,3-2.81V93.7a2.81,2.81,0,0,0-2.64-2.79,36.1,36.1,0,0,1-14.21-4A36.68,36.68,0,0,1,26,54.21V42.94A8.94,8.94,0,0,1,34.94,34H93.07A8.93,8.93,0,0,1,102,42.93V54.21a92.85,92.85,0,0,1-.59,10.35,2.81,2.81,0,0,0,2.33,3.07l4.35.72a2.79,2.79,0,0,0,3.23-2.43A102.22,102.22,0,0,0,112,54.21V42.94A18.94,18.94,0,0,0,93.06,24Z" /><circle cx="48" cy="56" r="8" /><circle cx="80" cy="56" r="8" /></symbol><symbol id="light-bulb" viewBox="0 0 32 32"><title>light-bulb</title><path d="m16 4.22c.497 0 .9-.403.9-.9v-1.32c0-.497-.403-.9-.9-.9s-.9.403-.9.9v1.32c0 .497.403.9.9.9z" /><path d="m3.558 14.862h-1.32c-.497 0-.9.403-.9.9s.403.9.9.9h1.319c.497 0 .9-.403.9-.9s-.402-.9-.899-.9z" /><path d="m29.762 14.862h-1.319c-.497 0-.9.403-.9.9s.403.9.9.9h1.319c.497 0 .9-.403.9-.9s-.403-.9-.9-.9z" /><path d="m25.096 5.394-.935.933c-.352.352-.352.921 0 1.273.176.176.406.264.637.264s.461-.088.636-.263l.935-.933c.352-.352.352-.921 0-1.273s-.924-.352-1.273-.001z" /><path d="m7.839 7.6c.352-.352.352-.921 0-1.273l-.935-.933c-.35-.351-.921-.351-1.272 0s-.352.921 0 1.273l.935.933c.175.175.405.263.636.263s.46-.087.636-.263z" /><path d="m15 7.671c-3.6.423-6.574 3.259-7.143 6.84-.515 3.242.862 6.2 3.196 7.951.653.49 1.064 1.227 1.088 2.039h7.717c.021-.807.426-1.544 1.076-2.029 2.013-1.504 3.317-3.903 3.317-6.609 0-4.887-4.247-8.781-9.251-8.192z" /><path d="m12.15 26.004v.146c0 1.07.43 2.03 1.13 2.72.69.7 1.66 1.13 2.72 1.13 2.13 0 3.85-1.72 3.85-3.85v-.146z" /></symbol></svg>
+@code {
+    private static readonly ConditionalWeakTable<ChatMessage, ChatMessageItem> SubscribersLookup = new();
+    private static readonly Regex CitationRegex = new(@"<citation filename='(?<file>[^']*)' page_number='(?<page>\d*)'>(?<quote>.*?)</citation>", RegexOptions.NonBacktracking);
+private static readonly Regex ThinkRegex = new(
+  @"<think>(?<quote>[\s\S]*?)</think>",
+  RegexOptions.NonBacktracking
+);
+    private List<(string File, int? Page, string Quote)>? citations;
+    private List<string> Thoughts = new();
+    [Parameter, EditorRequired]
+    public required ChatMessage Message { get; set; }
+
+    [Parameter]
+    public bool InProgress { get; set;}
+
+    protected override void OnInitialized()
+    {
+        SubscribersLookup.AddOrUpdate(Message, this);
+
+        if (!InProgress && Message.Role == ChatRole.Assistant && Message.Text is { Length: > 0 } text)
+        {
+            ParseCitations(text);
+            ParseThoughts(text);
+        }
+    }
+
+    public static void NotifyChanged(ChatMessage source)
+    {
+        if (SubscribersLookup.TryGetValue(source, out var subscriber))
+        {
+            subscriber.StateHasChanged();
+        }
+    }
+
+    private void ParseCitations(string text)
+    {
+        var matches = CitationRegex.Matches(text);
+        citations = matches.Any()
+            ? matches.Select(m => (m.Groups["file"].Value, int.TryParse(m.Groups["page"].Value, out var page) ? page : (int?)null, m.Groups["quote"].Value)).ToList()
+            : null;
+    }
+    private void ParseThoughts(string text)
+    {
+        var matches = ThinkRegex.Matches(text);
+        Thoughts = matches.Any()
+            ? matches.Select(m => m.Groups["quote"].Value).ToList()
+            : new List<string>();
+    }
+}

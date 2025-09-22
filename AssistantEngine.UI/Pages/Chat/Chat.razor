@@ -1,0 +1,504 @@
+﻿@page "/"
+@using System.ComponentModel
+@using AssistantEngine.Factories
+@using AssistantEngine.Services.Extensions
+@using AssistantEngine.Services.Implementation
+@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Implementation.Database
+@using AssistantEngine.UI.Services.Implementation.Factories
+@using AssistantEngine.UI.Services.Implementation.Models.Chat
+@using AssistantEngine.UI.Services.Models
+@using AssistantEngine.UI.Services.Models.Chat
+@using static AssistantEngine.Services.Extensions.ChatMessageExtensions;
+
+@inject NavigationManager Nav
+@inject SemanticSearch Search
+@implements IDisposable
+@inject ChatClientState ClientState
+@inject IDatabaseRegistry DbRegistry
+@inject IAppHealthService Health
+@inject ChatClientFactory ChatFactory
+@inject ChatClientState State
+@inject IJSRuntime JSRuntime
+@inject IChatRepository ChatRepository
+
+<PageTitle>Assistant Engine - Chat</PageTitle>
+
+<Sidebar CurrentSession="@chatSession"
+         CurrentSessionChanged="OnSessionChanged"  
+         OpenSettingsModalRequested="OpenSettingsModal" />
+
+<OllamaImportModal @ref="_importModal" />
+<GlobalSettingsModal @ref="_settingsModal" />
+<div id="chat-container-outer">
+
+    <div class="chat-container-inner">
+        
+        <ChatHeader @ref="header" OpenModalRequested="OpenImportModal" OnStateChange="@SwitchModel" OnNewChat="@ResetConversationAsync" OnStateSelected="SwitchModel2" OnToggleSidebar="ToggleSidebar" IsSidebarVisible="@showSidebar" />
+
+        @if (!isIngesting)
+        {
+            <ChatMessageList Messages="@messages" ChatResponse="@chatResponse" InProgressMessage="@currentResponseMessage" IsLoading="@isLoading">
+                <NoMessagesContent>
+                    <div class="description-text-1">@ClientState.Config.Description</div>
+                    @*<div>Tools @(chatOptions?.Tools?.Any() == true ? string.Join(", ", chatOptions.Tools.Select(x => x.Name)) : "No tools available")</div>*@
+
+
+                    @*<ChatCitation File="Example_Emergency_Survival_Kit.pdf" />
+                    <ChatCitation File="Example_GPS_Watch.pdf" />*@
+                </NoMessagesContent>
+            </ChatMessageList>
+        }
+        else
+        {
+            <LoadingSpinner Visible="@isIngesting" Message="Ingesting Data..." />
+
+        }
+      
+        <div id="chat-container" class="chat-container">
+           <ChatSuggestions OnSelected="@AddUserMessageAsync" @ref="@chatSuggestions" />
+            <ChatInput OnSend="@AddUserMessageAsync" @ref="@chatInput" />
+
+        </div>
+    </div>
+    @if (showSidebar)
+    {
+        <ChatOptionsSidebar OnStateChange="@SwitchModel" AssistantConfig="@ClientState.Config" class="order-last" />
+    }
+
+   </div>
+
+@code {
+    private ChatHeader? header;
+    private OllamaImportModal? _importModal;
+    private GlobalSettingsModal? _settingsModal;
+    private DotNetObjectReference<Chat>? _ref;
+    Dictionary<string, IDatabase> databaseDict;
+    private AppHealthSnapshot _health;
+    private EventHandler<AppHealthSnapshot>? _healthHandler;
+    ChatSession chatSession = new();
+    private List<ChatMessage> messages = new();
+    private async Task SwitchModel()
+    {
+        await ChatRepository.SaveAsync(chatSession);
+        await OnParametersSetAsync();
+        await InvokeAsync(StateHasChanged);
+
+    }
+    private void OpenSettingsModal() => _settingsModal?.Open();
+    private void OpenImportModal() => _importModal?.OpenDownloadModal();
+    private void SetupChatState()
+    {
+        databaseDict = DbRegistry.All.ToDictionary(x => x.Key, x => x.Value);
+
+        // only add system prompt once
+        if (messages.Count > 0)
+        {
+            messages.Clear();
+        }
+
+        if (messages.Count == 0)
+            messages.Add(new(ChatRole.System, State.Config.SystemPrompt));
+
+        Console.WriteLine(chatOptions.Tools);
+    }
+
+
+    private async Task SwitchModel2()
+    {
+
+
+    }
+    private IChatClient ChatClient => ChatFactory(State.Config.AssistantModel.ModelId);
+    private IChatClient MiniClient => ChatFactory(State.Config.MiniTaskModel.ModelId);
+    AssistantConfig CurrentConfig => ClientState.Config;
+    private bool isIngesting => !ClientState.IngestionFinished;
+    //IChatClient ChatClient => (IChatClient) ClientState.Client; testing with this removed
+
+
+    protected override void OnInitialized()
+    {
+        ClientState.OnLoaderMessage += (v, m) =>
+        {
+       
+            InvokeAsync(StateHasChanged);
+        };
+    }
+
+    private async Task OnSessionChanged(ChatSession session)
+    {
+        CancelAnyCurrentResponse();
+        chatSession = session;
+        messages = chatSession.Messages?.ToList() ?? new List<ChatMessage>();
+
+        //ok
+
+        await InvokeAsync(StateHasChanged);
+      
+    }
+    private ChatOptions chatOptions => ClientState.ChatOptions;
+
+    private CancellationTokenSource? currentResponseCancellation;
+    private ChatMessage? currentResponseMessage;
+    private ChatResponse? chatResponse;
+    private ChatInput? chatInput;
+    private ChatSuggestions? chatSuggestions;
+
+
+    private bool showSidebar = false;
+    private bool isLoading = false;
+
+    private void ToggleSidebar()
+    {
+        showSidebar = !showSidebar;
+
+    }
+
+
+    // — then call it here (and drop OnInitialized entirely)
+    // — then call it here (and drop OnInitialized entirely)
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            SetupChatState();
+            // await base.OnParametersSetAsync();
+            await base.OnParametersSetAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            Console.WriteLine(ex.StackTrace);
+        }
+
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _health = Health.Snapshot;
+
+        await State.ChangeModelAsync();
+        await InvokeAsync(StateHasChanged);
+
+        await base.OnInitializedAsync();
+    }
+
+
+    private OllamaSharp.Models.Model currentModel;
+    private async Task AddUserMessageAsync(ChatMessage userMessage)
+    {
+        var o = Health.Get(HealthDomain.Ollama);
+        if (o.Level != HealthLevel.Healthy)
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", o.Error ?? "Ollama not reachable.", "Chat");
+            return;
+        }
+
+        CancelAnyCurrentResponse();
+
+        // Add the user message to the conversation
+        messages.Add(userMessage);
+        chatSuggestions?.Clear();
+        await chatInput!.FocusAsync();
+
+        // Display a new response from the IChatClient, streaming responses
+        // aren't supported because Ollama will not support both streaming and using Tools
+        currentResponseCancellation = new();
+
+        DateTime startTime = DateTime.UtcNow;
+
+        // currentResponseMessage = new ChatMessage(){a };
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        var filteredMessages = FilterChatMessages(messages);
+
+        var response = await ChatClient.GetResponseAsync(filteredMessages, chatOptions, currentResponseCancellation.Token);
+        var merged = new List<ChatMessage>();
+        ChatMessage? buffer = null;
+
+        foreach (var m in response.Messages)
+        {
+            if (m.Role == ChatRole.Assistant)
+            {
+                if (buffer == null)
+                {
+                    buffer = new ChatMessage
+                    {
+                        MessageId = Guid.NewGuid().ToString(),   // ✅ assign unique Id
+                        Role = ChatRole.Assistant
+                    };
+                    foreach (var c in m.Contents ?? Enumerable.Empty<AIContent>())
+                        buffer.Contents.Add(c);
+                }
+                else
+                {
+                    foreach (var c in m.Contents ?? Enumerable.Empty<AIContent>())
+                        buffer.Contents.Add(c);
+                }
+            }
+            else if(m.Role == ChatRole.User)
+            {
+                if (buffer != null) { merged.Add(buffer); buffer = null; }
+                merged.Add(new ChatMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Role = m.Role,
+                    Contents = new List<AIContent>(m.Contents ?? [])
+                });
+            }
+            else
+            {
+
+
+
+                merged.Add(new ChatMessage
+                {
+                    MessageId = Guid.NewGuid().ToString(),
+                    Role = m.Role,
+                    Contents = new List<AIContent>(m.Contents ?? [])
+                });
+            }
+        }
+        if (buffer != null) merged.Add(buffer);
+        foreach (var mm in merged)
+        {
+            string hashCode = $"{mm.Role} {mm.MessageId} contents: {string.Join(",", mm.Contents.Select(c => c.GetHashCode()))}";
+            Console.WriteLine(hashCode);
+            if (string.IsNullOrEmpty(mm.MessageId) || messages.Any(x => x.MessageId == mm.MessageId))
+            {
+                mm.MessageId = Guid.NewGuid().ToString();
+            }
+
+            messages.Add(mm.Clone());
+        }// it looks fine here. the merged does not contain multiple of the same contents. but after this it does
+
+
+        DateTime finishTime = DateTime.UtcNow;
+        TimeSpan duration = finishTime.Subtract(startTime);
+        if(response.AdditionalProperties != null)
+        {
+            response.AdditionalProperties.Add("total_duration_all", duration);
+            var totalDurationAnalysis = TimeSpan.Parse(response.AdditionalProperties["total_duration"].ToString());
+            var toolDuration = duration - totalDurationAnalysis;
+            response.AdditionalProperties.Add("tool_duration", toolDuration);
+
+        }
+
+        isLoading = false;
+
+
+        //messages.AddMessages(response); 
+
+
+        chatSession.Messages = messages;
+        chatResponse = response;
+        if(chatSession.DefaultTitle())
+        {
+            await SetChatMessageTitle();
+        }
+
+
+        chatSuggestions?.Update(messages);
+        await ChatRepository.SaveAsync(chatSession);
+        //ChatMessageList.S
+
+    }
+
+    private List<ChatMessage> FilterChatMessages(List<ChatMessage> messagesToFilter)
+    {
+        var filteredMessages = messagesToFilter;
+        ChatOptions chatOptions = new ChatOptions();
+
+
+        if (!State.Config.PersistThoughtHistory)
+        {
+            filteredMessages.RemoveThinkMessages();
+        }
+
+        return filteredMessages;
+    }
+
+
+    private async Task SetChatMessageTitle()
+    {
+        try
+        {
+            var miniOptions = ClientState.Config.ModelOptions.First(m => m.Key == "MiniTask").Options;
+            List<ChatMessage> messagesx = new();
+            string prompt = $"Output a maximum three word title for text you receive. Only ever output these words.";
+            string userMessage = messages.First(x => x.Role == ChatRole.User).Text;
+            messagesx.Add(new(ChatRole.System, prompt));
+            messagesx.Add(new(ChatRole.User, userMessage));
+            var response = await MiniClient.GetResponseAsync(messagesx, miniOptions);
+            string title = ChatMessageExtensions.RemoveThinkTags(response.Messages.First(x => x.Role == ChatRole.Assistant).Text);
+            chatSession.Title = title;
+            await ChatRepository.SaveAsync(chatSession);
+            await InvokeAsync(StateHasChanged);
+        }catch(Exception ex)
+        {
+            Console.WriteLine("Error Setting Chat Message Title");
+            Console.WriteLine(ex.Message);
+            Console.WriteLine(ex.StackTrace);
+        }
+
+    }
+
+
+
+    private Task SwitchModel(OllamaSharp.Models.Model model)
+    {
+        currentModel = model;
+        // maybe restart the chat or just show the new model name
+        return Task.CompletedTask;
+    }
+    private void CancelAnyCurrentResponse()
+    {
+        // If a response was cancelled while streaming, include it in the conversation so it's not lost
+        if (currentResponseMessage is not null)
+        {
+            messages.Add(currentResponseMessage);
+        }
+        isLoading = false;
+        chatResponse = null;
+        currentResponseCancellation?.Cancel();
+        currentResponseMessage = null;
+    }
+
+    private async Task ResetConversationAsync() //clear active here
+    {
+        try{
+            chatSession = new();
+            CancelAnyCurrentResponse();
+            messages.Clear();
+            messages.Add(new(ChatRole.System, State.Config.SystemPrompt));
+            chatSuggestions?.Clear(); chatResponse = null;
+            await chatInput!.FocusAsync();
+        }catch(Exception ex)
+        {
+            Console.WriteLine(ex.Message);Console.WriteLine(ex.StackTrace);
+        }
+
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            State.OnStatusMessage += async msg =>
+            {
+                await JSRuntime.InvokeVoidAsync(
+                    "GLOBAL.toastrInterop.info",
+                    msg,
+                    "Info"
+                );
+            }; _ref ??= DotNetObjectReference.Create(this);
+
+            // HEALTH → initial toast
+            _health = Health.Snapshot;
+
+            var ollama = _health[HealthDomain.Ollama];
+            if (ollama.Level == HealthLevel.Unhealthy)
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", ollama.Error ?? "Ollama error", "Ollama");
+            else if (ollama.Level == HealthLevel.Healthy)
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"Connected to Ollama ({ollama.Meta?["ServerUrl"]})", "Ollama");
+
+            _healthHandler = async (_, snap) =>
+            {
+                _health = snap;
+                var o = snap[HealthDomain.Ollama];
+                if (o.Level == HealthLevel.Unhealthy)
+                    await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", o.Error ?? "Ollama error", "Ollama");
+                else if (o.Level == HealthLevel.Healthy)
+                    await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"Connected to Ollama ({o.Meta?["ServerUrl"]})", "Ollama");
+
+                // Optional: show vector-store or database issues similarly if you want.
+                await InvokeAsync(StateHasChanged);
+            };
+            Health.Changed += _healthHandler;
+
+
+            await JSRuntime.InvokeVoidAsync("GLOBAL.SetOllamaRef", _ref);
+        }
+
+        await JSRuntime.InvokeVoidAsync("GLOBAL.HighlightAllPrism");
+    }
+    // add once in the component/class
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte>
+        _pulling = new(System.StringComparer.OrdinalIgnoreCase);
+    private readonly CancellationTokenSource cts = new();
+
+
+
+    private async Task<bool> IsInstalledAsync(string model, CancellationToken ct = default)
+    {
+        // normalize ":latest"
+        if (!model.Contains(':')) model += ":latest";
+        var local = await ClientState.OllamaClient.ListLocalModelsAsync(ct);
+        return local.Any(x => string.Equals(x.Name, model, StringComparison.OrdinalIgnoreCase));
+    }
+    private async Task PullModelAndNotifyAsync(string model, CancellationToken ct)
+    {
+        if (await IsInstalledAsync(model, ct))
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"{model} already installed", "Ollama"); 
+            return;
+        }
+        if (!_pulling.TryAdd(model, 0))
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", $"{model} is already downloading", "Ollama");
+            return;
+        }
+
+        try
+        {
+           
+
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", $"Starting download: {model}", "Ollama");
+
+            var req = new OllamaSharp.Models.PullModelRequest { Model = model };
+            await foreach (var evt in ClientState.OllamaClient.PullModelAsync(req).WithCancellation(ct).ConfigureAwait(false))
+            {
+                // no per-tick JS calls; let the loop stream quietly
+                // rely on final success + post-check
+            }
+
+            // Final verification is the source of truth
+            if (await IsInstalledAsync(model, ct))
+            {
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"Download complete: {model}", "Ollama");
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", $"Download finished but not installed: {model}", "Ollama");
+            }
+        }
+        catch (OperationCanceledException) { /* optional toast */ }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", $"Failed to download {model}: {ex.Message}", "Ollama");
+        }
+        finally
+        {
+            _pulling.TryRemove(model, out _);
+            await header!.RefreshModelsAsync();
+          //  await InvokeAsync(StateHasChanged); did not helpop
+        }
+    }
+
+    [JSInvokable]
+    public Task PullModelFromLink(string model)
+    {
+       
+        // don’t block the UI thread; run on background
+        _ = Task.Run(() => PullModelAndNotifyAsync(model, cts.Token));
+        return Task.CompletedTask;
+    }
+
+    public void Dispose()
+    {
+        currentResponseCancellation?.Cancel();
+        if (_healthHandler is not null) Health.Changed -= _healthHandler;
+    }
+
+
+}

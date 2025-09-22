@@ -1,0 +1,134 @@
+﻿@using AssistantEngine.Factories
+
+@using AssistantEngine.UI.Services.Implementation.Config
+@using AssistantEngine.UI.Services.Implementation.Factories
+@using AssistantEngine.UI.Services.Models
+@inject IAssistantConfigStore ConfigStore;
+@inject ChatClientState CurrentState
+@inject ChatClientFactory ChatFactory
+@inject IJSRuntime JSRuntime
+
+
+<div class="chat-model-container">
+    @if (ConfigStore.GetAll()?.Any() ?? false)
+    {
+        <div id="configToggle" class="config-selector model-selector" @onclick="ToggleDropdown">
+            <span class="config-dd-selected">@SelectedName</span>
+            <span class="arrow">
+                @if (dropdownOpen)
+                {
+                    <i class="fi fi-br-angle-up"></i>
+                }
+                else
+                {
+                    <i class="fi fi-br-angle-down"></i>
+                }
+              
+            </span>
+
+
+
+            <div id="configDropdown" class="dropdown-container config-dropdown @(dropdownOpen ? "show" : "hidden")">
+                @foreach (var cfg in ConfigStore.GetAll())
+                {
+                    <div class="config-dropdown-item@(cfg.Id == SelectedId ? " selected" : "")"
+                         @onclick="() => SwitchModel(cfg)">
+                        <span class="config-name">@cfg.Name</span>
+                        <span class="config-id">(@cfg.Id)</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+
+@code {
+    private string dropdownId => "configToggle"; // Generate a unique ID based on model
+    [Parameter] public EventCallback<AssistantConfig> OnSelect { get; set; }
+
+    private bool dropdownOpen;
+    private string SelectedId;
+
+    private string SelectedName =>
+        string.IsNullOrEmpty(SelectedId)
+            ? CurrentState.Config.Name
+            : ConfigStore.GetAll().First(c => c.Id == SelectedId).Name;
+
+    private async Task ToggleDropdown()
+    {
+        dropdownOpen = !dropdownOpen;
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.SetOpenDropdownId", dropdownOpen ? dropdownId : null);
+        }
+        catch (JSException)
+        {
+
+        }
+        StateHasChanged();
+  
+    }
+
+    private void SelectConfig(AssistantConfig cfg)
+    {
+        dropdownOpen = false;
+        SelectedId = cfg.Id;
+
+    }
+    private async Task SwitchModel(AssistantConfig cfg)
+    {
+        // dropdownOpen = false;
+        SelectedId = cfg.Id;
+        await CurrentState.ChangeModelAsync(cfg.Id);
+        await OnSelect.InvokeAsync(cfg);
+        await InvokeAsync(StateHasChanged);
+        // return InvokeAsync(StateHasChanged);
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+
+            try
+            {
+                var lDotNetReference = DotNetObjectReference.Create(this);
+                // Register this component reference in JavaScript
+                await JSRuntime.InvokeVoidAsync("GLOBAL.SetDotnetReference", dropdownId, lDotNetReference); await InvokeAsync(StateHasChanged);
+            } catch (JSException)
+            {
+                
+            }
+        
+
+
+        }
+        catch (OperationCanceledException)
+        {
+
+            Console.WriteLine("@a");
+        }
+        finally
+        {
+        
+        }
+    }
+
+
+
+    [JSInvokable("HandleOutsideClick")]
+    public void HandleOutsideClick(string dropdownId)
+    {
+        if (this.dropdownId == dropdownId)
+        {
+            dropdownOpen = false;
+            StateHasChanged();
+        }
+    }
+    // Register the JS listener on component load
+  
+ 
+}

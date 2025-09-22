@@ -1,0 +1,43 @@
+﻿@if (ChatResponse != null)
+{
+    var totalDuration = TimeSpan.Parse(ChatResponse.AdditionalProperties["total_duration_all"].ToString());
+    var thisModelDuration = TimeSpan.Parse(ChatResponse.AdditionalProperties["total_duration"].ToString());
+    var loadDuration = TimeSpan.Parse(ChatResponse.AdditionalProperties["load_duration"].ToString());
+    var evalDuration = TimeSpan.Parse(ChatResponse.AdditionalProperties["eval_duration"].ToString());
+    var toolDuration = TimeSpan.Parse(ChatResponse.AdditionalProperties["tool_duration"].ToString());
+    var tokensUsed = ChatResponse.Usage.TotalTokenCount;
+
+    <div id="chat-completion-info" class="page-width">
+        <div class="config-item">
+            <span class="config-title">Time Elapsed:</span>
+            <span class="config-value">@FormatDuration(totalDuration)</span>
+        </div>
+        <div class="config-item">
+            <span class="config-title">Load Duration:</span>
+            <span class="config-value">@FormatDuration(loadDuration)</span>
+        </div>
+        <div class="config-item">
+            <span class="config-title">Eval Duration:</span>
+            <span class="config-value">@FormatDuration(evalDuration)</span>
+        </div>   
+        <div class="config-item">
+            <span class="config-title">Tools Duration:</span>
+            <span class="config-value">@FormatDuration(toolDuration)</span>
+        </div>       <div class="config-item">
+            <span class="config-title">Tokens Used:</span>
+            <span class="config-value">@tokensUsed</span>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public ChatResponse ChatResponse { get; set; }
+
+    private string FormatDuration(TimeSpan duration)
+    {
+        // Format as MM:SS (Minutes:Seconds)
+        return $"{(int)duration.TotalMinutes:D2}:{duration.Seconds:D2}";
+    }
+}
+

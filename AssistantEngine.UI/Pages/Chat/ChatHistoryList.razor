@@ -1,0 +1,74 @@
+﻿@using AssistantEngine.Services.Implementation
+@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Implementation.Models.Chat
+@using AssistantEngine.UI.Services.Models.Chat
+@inject IChatRepository ChatRepository
+@implements IDisposable
+
+<ul class="chat-history-list">
+    <li class="has-sub @(showSessions ? "active" : "")">
+        <a href="#" class="nav-link nav-link-t" @onclick="ToggleSessions">Chats</a>
+        <ul class="sub-menu" style="@(showSessions ? "display:block" : "display:none")">
+            @foreach (var kv in sessions.Reverse())
+            {
+                <li class="session-item d-flex align-items-center  @(kv.Key == CurrentSession.Id ? "active" : "")">
+                    <a href="#"
+                       class="nav-link"
+                       @onclick="() => LoadSession(kv.Key)">
+                        @kv.Value
+                    </a>
+                    <button class="btn btn-sm ml-2" @onclick="() => ClearSession(kv.Key)" aria-label="Clear chat">
+                        <i class="fi-br-cross"></i>
+                    </button>
+                </li>
+            }
+        </ul>
+    </li>
+</ul>
+
+@code {
+    [Parameter] public ChatSession? CurrentSession { get; set; }
+    [Parameter] public EventCallback<ChatSession> CurrentSessionChanged { get; set; }
+    private IReadOnlyDictionary<string, string> sessions = new Dictionary<string, string>();
+    private bool showSessions = true;
+
+    private void ToggleSessions()
+        => showSessions = !showSessions;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ChatRepository.InitializeAsync();
+
+        sessions = ChatRepository.ChatSessionNames;
+    }
+    private async Task LoadSession(string sessionId)
+    {
+        var session = await ChatRepository.LoadAsync(sessionId);
+        if (session == null) return;
+
+        await CurrentSessionChanged.InvokeAsync(session);
+    }
+
+
+protected override void OnInitialized()
+   {
+        ChatRepository.SessionsChanged += HandleSessionsChanged;
+    }
+    private async Task ClearSession(string sessionId)
+    {
+        await ChatRepository.ClearSessionAsync(sessionId);
+        //await ChatRepository.InitializeAsync();
+        //sessions = ChatRepository.ChatSessionNames;
+    }
+
+        private void HandleSessionsChanged()
+    {
+        sessions = ChatRepository.ChatSessionNames;
+        InvokeAsync(StateHasChanged);
+    }
+        public void Dispose()
+    {
+        ChatRepository.SessionsChanged -= HandleSessionsChanged;
+    }
+
+}

@@ -1,0 +1,90 @@
+Copyright (c) 2025 Assistant Engine Ltd
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions, and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions, and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+4. Branding & Attribution.
+   (a) You may not remove, obscure, recolor, replace, or otherwise diminish any
+       “Assistant Engine” branding (including name, logo, wordmarks, or default
+       UI credits) in any deployment or distribution, except as expressly
+       permitted by Clause 5 or an Enterprise License.
+   (b) Community Edition deployments must retain a visible “About/Attribution”
+       reference such as: “Powered by Assistant Engine — assistantengine.ai”.
+
+5. Small-Team Allowance (Branding Adjustments).
+   Internal deployments with no more than fifty (50) Active Users in any rolling
+   thirty (30) day period may request minimal branding adjustments for internal
+   use, provided that clear attribution remains visible and branding is not
+   removed or replaced. This allowance does not authorize white-labeling or
+   redistribution.
+
+6. Scale Threshold (Enterprise Required).
+   If a deployment serves more than fifty (50) Active Users in any rolling
+   thirty (30) day period within an Organization, you must obtain an Enterprise
+   License from Assistant Engine Ltd, whether or not branding is retained.
+
+7. Redistribution, Hosting, and White-Label.
+   Any redistribution to third parties—including hosted/SaaS, OEM, managed
+   service/portal, or packaged resale models—or any removal/replacement of
+   branding in connection with such redistribution, requires an Enterprise
+   License.
+
+8. No Misrepresentation.
+   You must not state or imply that your deployment, distribution, or fork is
+   sponsored by, endorsed by, or affiliated with Assistant Engine Ltd without
+   specific prior written permission. Public forks must include a conspicuous
+   disclosure in the About screen and README stating:
+   “This is a customized fork of Assistant Engine (assistantengine.ai) and is
+   not affiliated with or endorsed by Assistant Engine Ltd.”
+
+9. Definitions.
+   “Active User” means a unique authenticated natural person who accesses the
+   user interface at least once during a rolling thirty (30) day window;
+   includes employees, contractors, and managed/guest accounts. Shared logins
+   count as the number of distinct individuals using them. Service/automation
+   accounts are excluded.
+   “Organization” means the deploying legal entity and any parent, subsidiary,
+   or affiliate under common control; Active Users are aggregated across them.
+   “Internal Deployment” means use within one Organization and not marketed or
+   provided to third parties.
+   “Redistribution” has the meaning in Clause 7 and includes hosted/SaaS,
+   OEM, managed service/portal, or packaged resale.
+
+10. Contributor Terms.
+    By contributing, you represent you have the right to do so under these
+    terms. Assistant Engine Ltd may request a contributor license agreement
+    (CLA) for substantial changes to maintain licensing clarity.
+
+11. Trademarks.
+    “Assistant Engine” names and logos are unregistered trademarks of Assistant
+    Engine Ltd. No rights to use our trademarks are granted by this License
+    beyond the attribution/branding requirements above, and you must not seek
+    to register confusingly similar marks.
+
+12. Governing Law.
+    This License is governed by the laws of England & Wales, and the courts of
+    England & Wales shall have exclusive jurisdiction over disputes arising out
+    of or in connection with it.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
