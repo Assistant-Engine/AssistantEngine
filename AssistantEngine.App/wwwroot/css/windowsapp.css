@@ -1,1 +1,30 @@
 ﻿/*has css spcific to the app project*/
+/* TEMP: flatten top UI to prove/kill faux header */
+html, body, #app {
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+header, .top-row, .navbar, .page-titlebar, [role="banner"] {
+    display: none !important;
+}
+
+body {
+    border-top: 0 !important;
+}
+
+.sidebar .sidebar-logo {
+    display: none !important;
+}
+.chat-header-container {
+    border-top: solid 1px;
+    border-color: var(--border-primary)
+}
+#maui-app-loader {
+    color: #ffffffe0;
+    font-weight: bold;
+    position: absolute;
+    left: 50%;
+    top: calc(50% - 20px);
+    transform: translate(-50%, -50%);
+}

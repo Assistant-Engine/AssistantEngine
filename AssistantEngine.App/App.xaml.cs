@@ -13,5 +13,6 @@ namespace AssistantEngine.App
         {
             return new Window(new MainPage()) { Title = "Assistant Engine" };
         }
+
     }
 }

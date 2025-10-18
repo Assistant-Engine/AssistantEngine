@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿#if WINDOWS || WEB
+using System.Collections.Generic;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 namespace AssistantEngine.Services.Implementation.Tools
 {
@@ -40,3 +41,4 @@ namespace AssistantEngine.Services.Implementation.Tools
 
 
 }
+#endif

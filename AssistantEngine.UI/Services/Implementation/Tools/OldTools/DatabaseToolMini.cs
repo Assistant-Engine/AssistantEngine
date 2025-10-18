@@ -1,6 +1,8 @@
-﻿using Microsoft.Extensions.AI;
+﻿#if WINDOWS || WEB
+using Microsoft.Extensions.AI;
 using Microsoft.SqlServer.Dac.Model;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+
 using Newtonsoft.Json;
 using static AssistantEngine.Services.Extensions.ChatMessageExtensions;
 using OllamaSharp.Models;
@@ -738,3 +740,4 @@ Please output only a corrected SQL query that fixes this error.";
 
     }
 }
+#endif

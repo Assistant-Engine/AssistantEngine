@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if WINDOWS || WEB
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -157,3 +158,4 @@ namespace AssistantEngine.Services.Implementation.Tools
         }
     }
 }
+#endif

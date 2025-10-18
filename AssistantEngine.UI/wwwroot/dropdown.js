@@ -8,17 +8,7 @@ GLOBAL.SetDotnetReference = function (dropdownId, pDotNetReference) {
     GLOBAL.DotNetReferences[dropdownId] = pDotNetReference;
 };
 
-/*old solution 14/08/2025
-// Function to set the currently open dropdown ID
-GLOBAL.SetOpenDropdownId = function (dropdownId) {
-    // Close the previous dropdown if it's different
-    if (GLOBAL.OpenDropdownId && GLOBAL.OpenDropdownId !== dropdownId) {
-        // Invoke HandleOutsideClick on the previous dropdown
-        GLOBAL.DotNetReferences[GLOBAL.OpenDropdownId].invokeMethodAsync('HandleOutsideClick', GLOBAL.OpenDropdownId);
-    }
-    GLOBAL.OpenDropdownId = dropdownId;
-};
-*/
+
 GLOBAL.SetOpenDropdownId = function (dropdownId) {
     if (GLOBAL.OpenDropdownId && GLOBAL.OpenDropdownId !== dropdownId) {
         const prevRef = GLOBAL.DotNetReferences[GLOBAL.OpenDropdownId];
@@ -88,15 +78,6 @@ window.GLOBAL.toastrInterop = {
 };
 
 
-/*$(function () {
-    $(document).on('click', '#toggleThemeBtn', function(){
-      var theme = $('html').attr('data-theme') || 'light';
-        $('html').attr('data-theme', theme === 'light' ? 'dark' : 'light');
-        $(this).find('i').toggleClass('fi-br-moon fi-br-sun');
-        console.log("xt");
-    });
-});*/
-
 (function () {
     if (window.__ollamaBound) return; window.__ollamaBound = true;
     document.addEventListener('click', function (e) {
@@ -111,23 +92,23 @@ window.GLOBAL.toastrInterop = {
         } else {
             console.warn('OllamaRef not set');
         }
-    }, true); // capture
+    }, true); 
 })();
 
 
-/*Why this works
 
-In Blazor server (web), the first HTML render happens almost immediately, so your jQuery ready handler runs after the button exists.
-In Blazor hybrid (WebView), the document loads first (your scripts run), then Blazor renders the Razor components later — so your handler needs to be bound in a way that survives the initial empty DOM.*/
-
-/*MAY NEED TO DO OTHER STUFF THIS WAY FOR WINDOWS VERSION*/
 document.addEventListener('DOMContentLoaded', () => {
 
-    // Theme toggle
     $(document).on('click', '#toggleThemeBtn', function () {
-        const theme = $('html').attr('data-theme') || 'light';
-        $('html').attr('data-theme', theme === 'light' ? 'dark' : 'light');
+        const cur = $('html').attr('data-theme') || 'light';
+        const next = (cur === 'light') ? 'dark' : 'light';
+        $('html').attr('data-theme', next);
         $(this).find('i').toggleClass('fi-br-moon fi-br-sun');
+        localStorage.setItem('ae-theme', next);
+
+        if (window.DotNet && DotNet.invokeMethodAsync) {
+            DotNet.invokeMethodAsync('AssistantEngine.UI', 'OnThemeChanged', next);
+        }
     });
 
     // "think" toggle

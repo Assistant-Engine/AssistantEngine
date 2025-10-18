@@ -21,12 +21,18 @@ namespace AssistantEngine.UI.Services.Models
         /// </summary>
         public List<NamedModelOption> ModelOptions { get; set; } = new()
         {
-           /* new() { Key = "Assistant", Label = "Assistant Model", Options = new ChatOptions { ModelId = "qwen3:8b" } },
-            new() { Key = "Descriptor", Label = "Descriptor Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
-            new() { Key = "Correction", Label = "Correction Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
-            new() { Key = "MiniTask", Label = "Mini Task Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
-            new() { Key = "Text2SQL", Label = "Text To SQL Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
-            new() { Key = "Embedding", Label = "Embedding Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } }*/
+            /* new() { Key = "Assistant", Label = "Assistant Model", Options = new ChatOptions { ModelId = "qwen3:8b" } },
+             new() { Key = "Descriptor", Label = "Descriptor Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
+             new() { Key = "Correction", Label = "Correction Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
+             new() { Key = "MiniTask", Label = "Mini Task Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
+             new() { Key = "Text2SQL", Label = "Text To SQL Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } },
+             new() { Key = "Embedding", Label = "Embedding Model", Options = new ChatOptions { ModelId = "gpt-3.5-turbo" } }*/
+        /*  new() { Key = "Assistant", Label = "Assistant Model", Options = new ChatOptions { ModelId = "qwen3:8b" } },
+  new() { Key = "Descriptor", Label = "Descriptor Model", Options = new ChatOptions { ModelId = "qwen3:8b" } },
+  new() { Key = "Correction", Label = "Correction Model", Options = new ChatOptions { ModelId = "qwen3:8b" } },
+  new() { Key = "MiniTask", Label = "Mini Task Model", Options = new ChatOptions { ModelId = "qwen3:8b" } },
+  new() { Key = "Text2SQL", Label = "Text To SQL Model", Options = new ChatOptions { ModelId = "qwen3:8b" } },
+  new() { Key = "Embedding", Label = "Embedding Model", Options = new ChatOptions { ModelId = "all-minilm:latest" } }*/
         };
 
 
@@ -40,7 +46,7 @@ namespace AssistantEngine.UI.Services.Models
       
         public List<DatabaseConfiguration> Databases { get; set; } = new();
         public string ModelProvider { get; set; } = "Ollama"; //default and only currently;
-        public string ModelProviderUrl { get; set; } = "http://localhost:11434";
+        public string ModelProviderUrl { get; set; } = "http://178.196.27.11:11434"; //TOREMOVE for testing mac
         public string SystemPrompt { get; set; } = "You are a helpful assistant. Answer the user's questions based on the provided context.";
 
 
@@ -52,7 +58,7 @@ namespace AssistantEngine.UI.Services.Models
 
         public List<string> EnabledFunctions { get; set; } = new List<string>() { "SearchAsync", "GetWeather", "GetKnownDatabases", "GetAllSQLSchema", "ExecuteSQL", "SearchDatabaseSchema" };
 
-        public string Description { get; set; } = "Welcome to AssistantEngine...";
+        public string Description { get; set; } = "Welcome to Assistant Engine...";
 
         public bool EnableThinking { get; set; } = true;
         public bool PersistThoughtHistory { get; set; } = true;

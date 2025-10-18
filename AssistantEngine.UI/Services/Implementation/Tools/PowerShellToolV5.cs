@@ -1,4 +1,5 @@
-﻿// Only the changed parts from PowerShellTool to PowerShellToolV2
+﻿#if WINDOWS || WEB
+// Only the changed parts from PowerShellTool to PowerShellToolV2
 
 using AssistantEngine.Services.Implementation;
 using AssistantEngine.Services.Implementation.Tools;
@@ -70,3 +71,4 @@ namespace AssistantEngine.Services.Implementation.Tools
         }
     }
 }
+#endif

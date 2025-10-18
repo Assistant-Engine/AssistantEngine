@@ -14,7 +14,6 @@ using AssistantEngine.UI.Services.Implementation.Startup;
 using AssistantEngine.UI.Services.Models;
 using AssistantEngine.UI.Services.Models.Ingestion;
 using AssistantEngine.UI.Services.Options;
-using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -25,6 +24,10 @@ namespace AssistantEngine.UI.Services;
 
 public static class DependencyInjection
 {
+    public static void RunAssistantEngineStartup(this IServiceProvider services)
+    {
+        AssistantEngine.UI.Services.Implementation.Startup.StartupInit.FireAndForget(services);
+    }
     public static IServiceCollection AddAssistantEngineCore(
         this IServiceCollection services,
       //  IAppConfigStore cfgStore,
@@ -108,21 +111,34 @@ public static class DependencyInjection
         var health = new AppHealthService();
         services.AddSingleton<IAppHealthService>(health);
         var def = modelConfigs.FirstOrDefault(m => m.Default) ?? modelConfigs.First();
-
-        EmbeddingBootstrap.RegisterDefaultEmbedding(
-            services, modelConfigs,
-            timeout: embedResolveTimeout ?? TimeSpan.FromSeconds(120),
-            onResolved: resolvedModel =>
-                health.SetStatus(
-                    HealthDomain.Ollama,
-                    HealthLevel.Healthy,
-                    error: null,
-                    detail: "Ollama reachable and embedding resolved.",
-                    meta: new Dictionary<string, string>
-                    {
-                        ["ServerUrl"] = def.ModelProviderUrl,
-                        ["EmbeddingModel"] = resolvedModel
-                    }));
+        try
+        {
+            EmbeddingBootstrap.RegisterDefaultEmbedding(
+                services, modelConfigs,
+                timeout: embedResolveTimeout ?? TimeSpan.FromSeconds(15),
+                onResolved: resolvedModel =>
+                    health.SetStatus(
+                        HealthDomain.Ollama,
+                        HealthLevel.Healthy,
+                        error: null,
+                        detail: "Ollama reachable and embedding resolved.",
+                        meta: new Dictionary<string, string>
+                        {
+                            ["ServerUrl"] = def.ModelProviderUrl,
+                            ["EmbeddingModel"] = resolvedModel
+                        }));
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+            Console.WriteLine(ex.StackTrace);
+            // Don’t crash the app if Ollama isn’t available at launch
+            health.SetStatus(
+                HealthDomain.Ollama,
+                HealthLevel.Degraded,
+                error: ex.Message,
+                detail: "Ollama not reachable at startup; continuing without embeddings.");
+        }
 
         if (!noInternetMode)
             services.AddSingleton<IDatabaseRegistry, DatabaseRegistry>();
@@ -155,15 +171,7 @@ public static class DependencyInjection
 
         return services;
     }
-    public static IApplicationBuilder UseAssistantEngineStartup(this IApplicationBuilder app)
-    {
-        AssistantEngine.UI.Services.Implementation.Startup.StartupInit.FireAndForget(app.ApplicationServices);
-        return app;
-    }
-    public static void RunAssistantEngineStartup(this IServiceProvider services)
-    {
-        AssistantEngine.UI.Services.Implementation.Startup.StartupInit.FireAndForget(services);
-    }
+
     private static void EnsureSingleDefault(List<AssistantConfig> list)
     {
         if (!list.Any(m => m.Default)) { list[0].Default = true; return; }

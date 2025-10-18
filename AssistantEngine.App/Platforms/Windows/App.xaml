@@ -4,5 +4,40 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:maui="using:Microsoft.Maui"
     xmlns:local="using:AssistantEngine.App.WinUI">
+    <maui:MauiWinUIApplication.Resources>
+        <ResourceDictionary>
+          
+            <!-- Theme dictionaries -->
+            <ResourceDictionary.ThemeDictionaries>
+
+           
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="TitleBarBackgroundBrush" Color="#F3F3F3"/>
+                    <SolidColorBrush x:Key="TitleBarForegroundBrush" Color="#1E1E1E"/>
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="TitleBarBackgroundBrush" Color="#1E1E1E"/>
+                    <SolidColorBrush x:Key="TitleBarForegroundBrush" Color="#E0E0E0"/>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- Title bar template -->
+            <DataTemplate x:Key="MauiAppTitleBarTemplate">
+                <Grid Height="48">
+                    <Border Background="{ThemeResource TitleBarBackgroundBrush}"/>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,8,0">
+                        <Image Width="20" Height="20" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <Image.Source>
+                                <BitmapImage UriSource="/Resources/AppIcon/favicon.ico" />
+                            </Image.Source>
+                        </Image>
+                        <TextBlock Text="Assistant Engine" FontWeight="Bold" Foreground="{ThemeResource TitleBarForegroundBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <Grid x:Name="DragRegion"/>
+                </Grid>
+            </DataTemplate>
+
+        </ResourceDictionary>
+    </maui:MauiWinUIApplication.Resources>
 
 </maui:MauiWinUIApplication>

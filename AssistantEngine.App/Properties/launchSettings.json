@@ -6,6 +6,10 @@
     },
     "Profile 1": {
       "commandName": "MsixPackage"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
     }
   }
 }

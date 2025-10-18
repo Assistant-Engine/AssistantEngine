@@ -43,8 +43,8 @@ namespace AssistantEngine.UI.Services.Implementation.Chat
             ContractResolver = new IncludeIgnoredResolver()
         };
    
-        public FileChatRepository(IConfiguration cfg)
-            => _path = cfg["ChatLogPath"] ?? "chats.jsonl";
+        public FileChatRepository(IAppConfigStore config)
+            => _path = Path.Combine(config.AppDataDirectory,"chats.jsonl") ?? "chats.jsonl";
 
       /*  public async Task SaveAsync(ChatSession session, CancellationToken ct = default)
         {

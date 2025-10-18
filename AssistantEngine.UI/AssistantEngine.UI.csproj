@@ -10,31 +10,16 @@
 		<AssemblyName>AssistantEngine.UI</AssemblyName>
 		<StaticWebAssetsEnabled>true</StaticWebAssetsEnabled>
 	</PropertyGroup>
-
+	<PropertyGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
+		<DefineConstants>$(DefineConstants);WINDOWS;WEB</DefineConstants>
+	</PropertyGroup>
+	<PropertyGroup Condition="$([MSBuild]::IsOSPlatform('osx'))">
+		<DefineConstants>$(DefineConstants);MACCATALYST</DefineConstants>
+	</PropertyGroup>
 	<ItemGroup>
-	  <Compile Remove="Services\Implementation\Models\Assistants\**" />
-	  <Content Remove="Services\Implementation\Models\Assistants\**" />
-	  <EmbeddedResource Remove="Services\Implementation\Models\Assistants\**" />
-	  <None Remove="Services\Implementation\Models\Assistants\**" />
-	</ItemGroup>
+		<EmbeddedResource Include="sql\GetTableSchemas.sql" />
 
-	<ItemGroup>
-	  <EmbeddedResource Include="sql\GetTableSchemas.sql" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<FrameworkReference Include="Microsoft.AspNetCore.App" />
-	</ItemGroup>
-
-
-
-
-
-	<ItemGroup>
 		<PackageReference Include="HtmlAgilityPack" Version="1.12.2" />
-		<PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="9.0.8" />
-		<PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.2" />
-		<PackageReference Include="Microsoft.SqlServer.DacFx.x64" Version="150.5282.3" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="OllamaSharp" Version="5.3.6" />
 		<PackageReference Include="Microsoft.Extensions.AI" Version="9.8.0" />
@@ -45,10 +30,62 @@
 		<PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
 		<PackageReference Include="System.Linq.Async" Version="6.0.3" />
 		<PackageReference Include="Microsoft.SemanticKernel.Connectors.SqliteVec" Version="1.53.0-preview" />
+		<!-- Mac branch abstractions kept to ensure cross-platform RCL usability -->
+		<PackageReference Include="Microsoft.AspNetCore.Components" Version="9.0.8" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Options" Version="9.0.8" />
+	</ItemGroup>
+
+	<!-- Windows-only tooling (as in Mac branch condition) -->
+	<ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
+		<PackageReference Include="Microsoft.SqlServer.DacFx.x64" Version="150.5282.3" />
+		<PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.2" />
 		<PackageReference Include="System.Management.Automation" Version="7.5.2" />
+		<!-- RuntimeCompilation existed on Windows/Web branch; keep it Windows-only -->
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="9.0.8" />
+	</ItemGroup>
+
+	<!-- Preserve Windows branch exclusion; keep folders available otherwise -->
+	<ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
+		<Compile Remove="Services\Implementation\Models\Assistants\**" />
+		<Content Remove="Services\Implementation\Models\Assistants\**" />
+		<EmbeddedResource Remove="Services\Implementation\Models\Assistants\**" />
+		<None Remove="Services\Implementation\Models\Assistants\**" />
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.11.0" />
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.8" />
+
+	</ItemGroup>
+	<ItemGroup>
+		<Content Update="Config/**/*.json">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<PublishFolderType>Content</PublishFolderType>
+		</Content>
+	</ItemGroup>
+	<ItemGroup>
+		<!-- exclude the shipped model files from Content so they don't get packed as Content -->
+		<Content Remove="Config/Models/RemoteAssistant*.json" /> 
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- embed the shipped model files so you can read them via Assembly resources -->
+		<EmbeddedResource Include="Config/Models/RemoteAssistant*.json" />
+	</ItemGroup>
+
+	<!-- Folders from Mac branch plus Windows wwwroot index -->
+	<ItemGroup>
+		<Folder Include="Services\Implementation\Models\Assistants\" />
+		<Folder Include="Services\Implementation\Tools\OldTools\" />
+		<Folder Include="wwwroot\Data\" />
+		<Folder Include="wwwroot\img\logos\" />
 		<Folder Include="wwwroot\img\index\" />
 	</ItemGroup>
 

@@ -3,7 +3,8 @@
 @using AssistantEngine.UI.Services.Models.Chat
 @using Microsoft.AspNetCore.Components.Routing
 
-<aside class="sidebar">
+<aside class="sidebar @(OperatingSystem.IsWindows() ? "windowsos" : null)">
+
     <div class="sidebar-logo">
         <a href="">
             <img src="_content/AssistantEngine.UI/img/logo.png"  id="chat-logo-main" />

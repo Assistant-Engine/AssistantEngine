@@ -3,8 +3,11 @@ using AssistantEngine.UI.Services.Implementation.Database;
 using AssistantEngine.UI.Services.Implementation.Factories;
 using AssistantEngine.UI.Services.Models;
 using Microsoft.Extensions.AI;
+
+#if WINDOWS || WEB
 using Microsoft.SqlServer.Dac.Model;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+#endif
 using Microsoft.Win32;
 using Newtonsoft.Json;
 using OllamaSharp.Models;
@@ -156,23 +159,27 @@ namespace AssistantEngine.Services.Implementation.Tools
             {
                 _notifier.StatusMessage("Validating query");
 
+                #if WINDOWS || WEB
                 var parser = new TSql150Parser(false);
                 using var rdr = new StringReader(sqlQuery);
                 var frag = parser.Parse(rdr, out var errors);
 
                 var visitor = new TableColumnVisitor();
                 frag.Accept(visitor);
+                #endif
 
                 var db = _dbRegistry.Get(database);   // 👈 live lookup
                 if (db == null)
                     return $"<error message=\"Unknown database '{database}'\" />";
 
                 var schema = db.GetSqlSchema();
+                #if WINDOWS || WEB
                 foreach (var tbl in visitor.TableNames)
                 {
                     if (!schema.ContainsKey(tbl))
                         return $"<error message=\"Table '{tbl}' not in schema\" />";
                 }
+                #endif
 
                 _notifier.StatusMessage("Query Valid");
                 return await db.ExecuteSQLAsync(sqlQuery);

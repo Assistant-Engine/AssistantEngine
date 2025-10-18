@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AppInstaller
-  Uri="https://echo-ed.tech/downloads/AssistantEngineInstaller-winX32.appinstaller"
+  Uri="https://assistantengine.ai/downloads/AssistantEngineInstaller-winX86.appinstaller"
   Version="0.0.1.0"
   xmlns="http://schemas.microsoft.com/appx/appinstaller/2018">
 
@@ -9,7 +9,7 @@
     Publisher="CN=AssistantEngine"
     Version="0.0.1.0"
     ProcessorArchitecture="x86"
-    Uri="https://echo-ed.tech/downloads/AssistantEngine.App_0.0.1.0_x86.msix" />
+    Uri="https://assistantengine.ai/downloads/AssistantEngine.App_0.0.1.0_x86.msix" />
 
   <UpdateSettings>
     <OnLaunch

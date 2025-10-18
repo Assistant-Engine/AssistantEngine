@@ -168,14 +168,14 @@ namespace AssistantEngine.UI.Services.Implementation.Config
         private static AppConfig CreateDefaults(string root)
         {
             var dataDir = Path.Combine(root, "App_Data");
-            var modelsDir = Path.Combine(AppContext.BaseDirectory, "Config", "Models"); // sensible cross-project default
+            var modelsDir = Path.Combine(dataDir, "Models"); // <-- was under AppContext.BaseDirectory (read-only on Mac)
             return new AppConfig
             {
-                //OllamaUrl = "http://localhost:11434",
                 VectorStoreFilePath = Path.Combine(dataDir, "vector-store-main.db"),
                 ModelFilePath = modelsDir
             };
         }
+
 
         private static AppConfig FillMissingWithDefaults(AppConfig cfg, string root)
         {
@@ -188,19 +188,25 @@ namespace AssistantEngine.UI.Services.Implementation.Config
 
         private void NormalizeAndEnsurePaths(ref AppConfig cfg, string root)
         {
-            if (!Path.IsPathRooted(cfg.VectorStoreFilePath))
-                cfg.VectorStoreFilePath = Path.GetFullPath(Path.Combine(root, cfg.VectorStoreFilePath));
+            string Root(string p) => Path.IsPathRooted(p) ? p : Path.GetFullPath(Path.Combine(root, p));
 
-            if (!Path.IsPathRooted(cfg.ModelFilePath))
-                cfg.ModelFilePath = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, cfg.ModelFilePath));
+            // ALWAYS root under writable data root
+            cfg.VectorStoreFilePath = Root(cfg.VectorStoreFilePath);
+            cfg.ModelFilePath = Root(cfg.ModelFilePath);
 
+            // Ensure parents exist in writable area
             var vsDir = Path.GetDirectoryName(cfg.VectorStoreFilePath);
             if (!string.IsNullOrEmpty(vsDir)) Directory.CreateDirectory(vsDir);
 
-            if (!Directory.Exists(cfg.ModelFilePath))
-                Directory.CreateDirectory(cfg.ModelFilePath);
+            Directory.CreateDirectory(cfg.ModelFilePath); // it's a directory path
+
+            Console.WriteLine("[AIO] DefaultDataRoot=" + _opts.DefaultDataRoot);
+            Console.WriteLine("[AIO] AppDataDirectory=" + AppDataDirectory);
+            Console.WriteLine("[AIO] VectorStoreFilePath=" + cfg.VectorStoreFilePath);
+            Console.WriteLine("[AIO] ModelFilePath=" + cfg.ModelFilePath);
 
             EnsureVectorStoreWritable(ref cfg, root);
         }
+
     }
 }
