@@ -74,7 +74,7 @@ Before you begin, make sure your development environment is ready:
    Open a terminal and run:
 
    ```bash
-   git clone https://github.com/Assistant Engine/Assistant Engine.git
+   git clone https://github.com/Assistant-Engine/AssistantEngine.git
    ```
 
 2. **Open in Visual Studio**
