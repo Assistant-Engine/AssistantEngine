@@ -20,7 +20,7 @@ namespace AssistantEngine.Services.Implementation.Tools
         [Description("Performs a web search via DuckDuckGo and returns the top results as XML snippets")]
         public async Task<IEnumerable<string>> WebSearchAsync(
             [Description("The query to search for on the web.")] string query,
-            [Description("Maximum number of results to return (default is 3).")] int maxResults = 3)
+            [Description("Maximum number of results to return (default is 5).")] int maxResults = 5)
         {
             try
             {
@@ -35,13 +35,13 @@ namespace AssistantEngine.Services.Implementation.Tools
                     .SelectNodes("//a[@class='result__a']")
                     ?.Take(maxResults)
                     ?? Enumerable.Empty<HtmlNode>();
-
-                return nodes.Select(n =>
+                IEnumerable<string> results = nodes.Select(n =>
                 {
                     var title = SecurityElement.Escape(n.InnerText.Trim());
                     var href = n.GetAttributeValue("href", "");
                     return $"<result title=\"{title}\" url=\"{SecurityElement.Escape(href)}\" />";
                 });
+                return results;
             }
             catch (HttpRequestException ex)
             {

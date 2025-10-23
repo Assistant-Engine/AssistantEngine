@@ -83,7 +83,6 @@
 	<!-- Folders from Mac branch plus Windows wwwroot index -->
 	<ItemGroup>
 		<Folder Include="Services\Implementation\Models\Assistants\" />
-		<Folder Include="Services\Implementation\Tools\OldTools\" />
 		<Folder Include="wwwroot\Data\" />
 		<Folder Include="wwwroot\img\logos\" />
 		<Folder Include="wwwroot\img\index\" />

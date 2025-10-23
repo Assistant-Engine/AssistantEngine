@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantEngine.UI", "Assis
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantEngine.Web", "AssistantEngine.Web\AssistantEngine.Web.csproj", "{5F43337E-75A7-9278-9705-E2167EA4003B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantEngine.Console", "AssistantEngine.Console\AssistantEngine.Console.csproj", "{3365360F-5A4B-4495-A645-31F493258F3A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,14 @@ Global
 		{5F43337E-75A7-9278-9705-E2167EA4003B}.Release|Any CPU.Build.0 = Release|Any CPU
 		{5F43337E-75A7-9278-9705-E2167EA4003B}.Release|x64.ActiveCfg = Release|Any CPU
 		{5F43337E-75A7-9278-9705-E2167EA4003B}.Release|x64.Build.0 = Release|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|x64.Build.0 = Debug|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|x64.ActiveCfg = Release|Any CPU
+		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

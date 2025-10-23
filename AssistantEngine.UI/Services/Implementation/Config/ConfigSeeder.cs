@@ -29,6 +29,8 @@ namespace AssistantEngine.UI.Services.Implementation.Config
                             n.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
+            var overwriteDuplicates = true; // true = overwrite same-Id + same-name files; false = current behavior
+
             foreach (var res in embeddedModels)
             {
                 var idx = res.IndexOf(Prefix, StringComparison.OrdinalIgnoreCase);
@@ -57,17 +59,40 @@ namespace AssistantEngine.UI.Services.Implementation.Config
                             try
                             {
                                 var txt = File.ReadAllText(f);
-                                using var jd = System.Text.Json.JsonDocument.Parse(txt);
-                                return jd.RootElement.TryGetProperty("Id", out var idEl) &&
-                                       string.Equals(idEl.GetString(), newId, StringComparison.OrdinalIgnoreCase);
+                                using var jd2 = System.Text.Json.JsonDocument.Parse(txt);
+                                return jd2.RootElement.TryGetProperty("Id", out var idEl2) &&
+                                       string.Equals(idEl2.GetString(), newId, StringComparison.OrdinalIgnoreCase);
                             }
                             catch { return false; }
                         });
 
-                    if (duplicateIdExists) { Console.WriteLine($"[seed] Skipped '{outName}' (Id '{newId}' already present)."); continue; }
+                    if (duplicateIdExists && !overwriteDuplicates)
+                    {
+                        Console.WriteLine($"[seed] Skipped '{outName}' (Id '{newId}' already present).");
+                        continue;
+                    }
+
+                    if (duplicateIdExists && overwriteDuplicates)
+                    {
+                        foreach (var fpath in Directory.EnumerateFiles(destDir, "*.json"))
+                        {
+                            try
+                            {
+                                var txt = File.ReadAllText(fpath);
+                                using var jd2 = System.Text.Json.JsonDocument.Parse(txt);
+                                if (jd2.RootElement.TryGetProperty("Id", out var idEl2) &&
+                                    string.Equals(idEl2.GetString(), newId, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    File.Delete(fpath);
+                                }
+                            }
+                            catch { /* ignore parse errors */ }
+                        }
+                    }
                 }
 
-                if (File.Exists(outPath)) continue;
+
+                if (!overwriteDuplicates && File.Exists(outPath)) continue;
 
                 using var f = File.Create(outPath);
                 ms.CopyTo(f);

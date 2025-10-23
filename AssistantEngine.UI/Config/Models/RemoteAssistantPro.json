@@ -1,5 +1,5 @@
 {
-  "Default": false,
+  "Default": true,
   "Name": "Assistant Pro (Remote)",
   "Version": 1.0,
   "Id": "Assistant Pro (Remote)",
@@ -64,10 +64,10 @@
   "IngestionPaths": [
   ],
   "EnabledFunctions": [
+    "SendHttpRequest",
     "SearchDatabase",
     "SearchCode",
     "SearchAsync",
-    "GetWeather",
     "GetKnownDatabases",
     "ExecuteSQL",
     "SearchDatabaseSchema",
@@ -77,7 +77,11 @@
     "ListFileEntries",
     "ReadFile",
     "WriteFile",
-    "DeleteFile"
+    "DeleteFile",
+    "AddEvaluationAt",
+    "AddEvaluationRecurring",
+    "ListEvaluations",
+    "CancelEvaluation"
   ],
   "Description": "Welcome to Assistant Engine…",
   "EnableThinking": true,

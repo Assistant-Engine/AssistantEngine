@@ -3,6 +3,7 @@ using AssistantEngine.Services.Implementation;
 using AssistantEngine.Services.Implementation.Tools;
 using AssistantEngine.UI.Pages.Chat;
 using AssistantEngine.UI.Services;
+using AssistantEngine.UI.Services.Extensions;
 using AssistantEngine.UI.Services.Implementation.Config;
 using AssistantEngine.UI.Services.Implementation.Database;
 using AssistantEngine.UI.Services.Implementation.Factories;
@@ -34,7 +35,7 @@ namespace AssistantEngine.Factories
     {
         public void Dispose()
         {
-            _notifier.OnStatusMessage -= ChatLoaderMessage;
+            _notifier.OnStatusMessage -= StatusMessage;
             _dbRegistry.DatabaseAdded -= OnDatabaseAddedAsync;
             _dbRegistry.DatabaseRemoved -= OnDatabaseRemoved;
         }
@@ -81,8 +82,8 @@ namespace AssistantEngine.Factories
             _notifier = notifier;
 
             // ✅ ensure idempotent subscriptions
-            _notifier.OnStatusMessage -= ChatLoaderMessage;
-            _notifier.OnStatusMessage += ChatLoaderMessage;
+            _notifier.OnStatusMessage -= StatusMessage;
+            _notifier.OnStatusMessage += StatusMessage;
 
             _dbRegistry.DatabaseAdded -= OnDatabaseAddedAsync;
             _dbRegistry.DatabaseAdded += OnDatabaseAddedAsync;
@@ -215,7 +216,7 @@ namespace AssistantEngine.Factories
             OnStatusMessage?.Invoke($"Model “{id}” ready");
 
             // wire up tools…
-            ChatOptions = Config.AssistantModel;
+            ChatOptions = Config.WithEnabledTools(_services);
             if (Config.EnabledFunctions is not null)
             {
                 var tools = _services.GetServices<ITool>();

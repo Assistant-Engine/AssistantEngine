@@ -30,17 +30,20 @@
 
 <OllamaImportModal @ref="_importModal" />
 <GlobalSettingsModal @ref="_settingsModal" />
+
+
 <div id="chat-container-outer">
 
     <div class="chat-container-inner">
         
-        <ChatHeader @ref="header" OpenModalRequested="OpenImportModal" OnStateChange="@SwitchModel" OnNewChat="@ResetConversationAsync" OnStateSelected="SwitchModel2" OnToggleSidebar="ToggleSidebar" IsSidebarVisible="@showSidebar" />
+        <ChatHeader @ref="header" OnToggleEvaluations="ToggleEvaluations" OpenModalRequested="OpenImportModal" OnStateChange="@SwitchModel" OnNewChat="@ResetConversationAsync" OnStateSelected="SwitchModel2" OnToggleSidebar="ToggleSidebar" IsSidebarVisible="@showSidebar" />
 
         @if (!isIngesting)
         {
-            <ChatMessageList Messages="@messages" ChatResponse="@chatResponse" InProgressMessage="@currentResponseMessage" IsLoading="@isLoading">
+            <ChatMessageList Messages="@messages" ChatResponse="@chatResponse" InProgressMessage="@currentResponseMessage" IsLoading="@isLoading" IsStreaming="@isStreaming" OnEditSubmit="@OnUserEditSubmit">
                 <NoMessagesContent>
-                    <div class="description-text-1">@ClientState.Config.Description</div>
+                    <img src="_content/AssistantEngine.UI/img/logo.svg" id="inner-logo-main" />
+                    @*<div class="description-text-1">@ClientState.Config.Description</div>@*
                     @*<div>Tools @(chatOptions?.Tools?.Any() == true ? string.Join(", ", chatOptions.Tools.Select(x => x.Name)) : "No tools available")</div>*@
 
 
@@ -78,6 +81,12 @@
     private EventHandler<AppHealthSnapshot>? _healthHandler;
     ChatSession chatSession = new();
     private List<ChatMessage> messages = new();
+
+
+    private void ToggleEvaluations()
+    {
+
+    }
     private async Task SwitchModel()
     {
         await ChatRepository.SaveAsync(chatSession);
@@ -109,6 +118,137 @@
 
 
     }
+
+    // NEW: stream tokens into currentResponseMessage in real time
+    private async Task GenerateAssistantResponseStreamingAsync(List<ChatMessage> filteredMessages)
+    {
+        currentResponseCancellation?.Dispose();
+        currentResponseCancellation = new();
+        isLoading = true;
+
+        // wall-clock start
+        var startTime = DateTime.UtcNow;
+        DateTime? firstTokenTime = null;
+
+        // prepare the in-progress assistant message (bound to ChatMessageList via InProgressMessage)
+        currentResponseMessage = new ChatMessage
+        {
+            MessageId = Guid.NewGuid().ToString(),
+            Role = ChatRole.Assistant
+        };
+
+        try
+        {
+            var updatesBuffer = new List<ChatResponseUpdate>();
+            var mergedAdditional = new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
+
+            await foreach (var update in ChatClient
+                .GetStreamingResponseAsync(filteredMessages, chatOptions, currentResponseCancellation.Token)
+                .ConfigureAwait(false))
+            {
+                isStreaming = true;
+                updatesBuffer.Add(update);
+
+                // merge AdditionalProperties as they arrive (last-write-wins)
+                if (update?.AdditionalProperties is not null)
+                    foreach (var kv in update.AdditionalProperties)
+                        mergedAdditional[kv.Key] = kv.Value;
+
+                var contents = update?.Contents ?? [];
+                foreach (var c in contents)
+                {
+                    // mark first token time on first piece of content (text or otherwise)
+                    if (!firstTokenTime.HasValue) firstTokenTime = DateTime.UtcNow;
+
+                    if (c is TextContent tc)
+                    {
+                        var lastText = currentResponseMessage!.Contents.OfType<TextContent>().LastOrDefault();
+                        if (lastText is null) currentResponseMessage!.Contents.Add(new TextContent(tc.Text));
+                        else lastText.Text += tc.Text;
+                    }
+                    else
+                    {
+                        currentResponseMessage!.Contents.Add(c);
+                        if (c.GetType().Name.Contains("ToolCall", StringComparison.OrdinalIgnoreCase))
+                            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", "Running tool…", "Tools");
+                        if (c.GetType().Name.Contains("ToolResult", StringComparison.OrdinalIgnoreCase))
+                            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", "Tool finished.", "Tools");
+                    }
+
+                    ChatMessageItem.NotifyChanged(currentResponseMessage!);
+                }
+
+                await InvokeAsync(StateHasChanged);
+            }
+
+            // build ChatResponse from updates
+            async IAsyncEnumerable<ChatResponseUpdate> Replay()
+            {
+                foreach (var u in updatesBuffer) yield return u;
+            }
+            chatResponse = await Replay().ToChatResponseAsync(currentResponseCancellation.Token);
+
+            // --- ensure AdditionalProperties contains required durations as per your definitions ---
+            chatResponse.AdditionalProperties ??= new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
+
+            // merge what we collected during streaming
+            foreach (var kv in mergedAdditional)
+                chatResponse.AdditionalProperties[kv.Key] = kv.Value;
+
+            var finishTime = DateTime.UtcNow;
+            var totalAll = finishTime - startTime;
+
+            // total_duration_all: whole wall time
+            if (!chatResponse.AdditionalProperties.ContainsKey("total_duration_all"))
+                chatResponse.AdditionalProperties["total_duration_all"] = totalAll;
+
+            // load_duration: start -> first token (or totalAll if no tokens ever arrived)
+            var loadDuration = firstTokenTime.HasValue ? (firstTokenTime.Value - startTime) : totalAll;
+            if (!chatResponse.AdditionalProperties.ContainsKey("load_duration"))
+                chatResponse.AdditionalProperties["load_duration"] = loadDuration;
+
+            // eval_duration: first token -> finish (zero if no tokens)
+            var evalDuration = firstTokenTime.HasValue ? (finishTime - firstTokenTime.Value) : TimeSpan.Zero;
+            if (!chatResponse.AdditionalProperties.ContainsKey("eval_duration"))
+                chatResponse.AdditionalProperties["eval_duration"] = evalDuration;
+
+            // total_duration (model time): if missing, use eval_duration
+            if (!chatResponse.AdditionalProperties.ContainsKey("total_duration"))
+                chatResponse.AdditionalProperties["total_duration"] = evalDuration;
+
+            // tool_duration: keep your existing approach (total_all - total_duration), never negative
+            if (!chatResponse.AdditionalProperties.ContainsKey("tool_duration"))
+            {
+                var toolDuration = TimeSpan.Zero;
+                chatResponse.AdditionalProperties["tool_duration"] = toolDuration;
+            }
+            // --- end ensure durations ---
+
+            messages.Add(currentResponseMessage!);
+            chatSession.Messages = messages;
+            currentResponseMessage = null;
+            isStreaming = false;
+            isLoading = false;
+
+            chatSuggestions?.Update(messages);
+            await ChatRepository.SaveAsync(chatSession);
+
+            if (chatSession.DefaultTitle())
+                await SetChatMessageTitle();
+        }
+        catch (OperationCanceledException)
+        {
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            isLoading = false;
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", ex.Message, "Streaming");
+        }
+    }
+
+
+
     private IChatClient ChatClient => ChatFactory(State.Config.AssistantModel.ModelId);
     private IChatClient MiniClient => ChatFactory(State.Config.MiniTaskModel.ModelId);
     AssistantConfig CurrentConfig => ClientState.Config;
@@ -147,6 +287,7 @@
 
     private bool showSidebar = false;
     private bool isLoading = false;
+    private bool isStreaming = false;
 
     private void ToggleSidebar()
     {
@@ -185,34 +326,16 @@
 
 
     private OllamaSharp.Models.Model currentModel;
-    private async Task AddUserMessageAsync(ChatMessage userMessage)
+    // NEW: centralize assistant generation so edits can reuse it
+    private async Task GenerateAssistantResponseAsync(List<ChatMessage> filteredMessages)
     {
-        var o = Health.Get(HealthDomain.Ollama);
-        if (o.Level != HealthLevel.Healthy)
-        {
-            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", o.Error ?? "Ollama not reachable.", "Chat");
-            return;
-        }
-
-        CancelAnyCurrentResponse();
-
-        // Add the user message to the conversation
-        messages.Add(userMessage);
-        chatSuggestions?.Clear();
-        await chatInput!.FocusAsync();
-
-        // Display a new response from the IChatClient, streaming responses
-        // aren't supported because Ollama will not support both streaming and using Tools
-        currentResponseCancellation = new();
-
+        //currentResponseCancellation ??= new();
+        currentResponseCancellation?.Dispose();
+        currentResponseCancellation = new();   // ✅ always fresh
         DateTime startTime = DateTime.UtcNow;
 
-        // currentResponseMessage = new ChatMessage(){a };
-        isLoading = true;
-        await InvokeAsync(StateHasChanged);
 
-        var filteredMessages = FilterChatMessages(messages);
-
+        
         var response = await ChatClient.GetResponseAsync(filteredMessages, chatOptions, currentResponseCancellation.Token);
         var merged = new List<ChatMessage>();
         ChatMessage? buffer = null;
@@ -225,7 +348,7 @@
                 {
                     buffer = new ChatMessage
                     {
-                        MessageId = Guid.NewGuid().ToString(),   // ✅ assign unique Id
+                        MessageId = Guid.NewGuid().ToString(),
                         Role = ChatRole.Assistant
                     };
                     foreach (var c in m.Contents ?? Enumerable.Empty<AIContent>())
@@ -237,7 +360,7 @@
                         buffer.Contents.Add(c);
                 }
             }
-            else if(m.Role == ChatRole.User)
+            else if (m.Role == ChatRole.User)
             {
                 if (buffer != null) { merged.Add(buffer); buffer = null; }
                 merged.Add(new ChatMessage
@@ -249,9 +372,6 @@
             }
             else
             {
-
-
-
                 merged.Add(new ChatMessage
                 {
                     MessageId = Guid.NewGuid().ToString(),
@@ -261,48 +381,90 @@
             }
         }
         if (buffer != null) merged.Add(buffer);
+
         foreach (var mm in merged)
         {
-            string hashCode = $"{mm.Role} {mm.MessageId} contents: {string.Join(",", mm.Contents.Select(c => c.GetHashCode()))}";
-            Console.WriteLine(hashCode);
             if (string.IsNullOrEmpty(mm.MessageId) || messages.Any(x => x.MessageId == mm.MessageId))
-            {
                 mm.MessageId = Guid.NewGuid().ToString();
-            }
 
             messages.Add(mm.Clone());
-        }// it looks fine here. the merged does not contain multiple of the same contents. but after this it does
-
+        }
 
         DateTime finishTime = DateTime.UtcNow;
-        TimeSpan duration = finishTime.Subtract(startTime);
-        if(response.AdditionalProperties != null)
+        TimeSpan duration = finishTime - startTime;
+        if (response.AdditionalProperties != null)
         {
             response.AdditionalProperties.Add("total_duration_all", duration);
-            var totalDurationAnalysis = TimeSpan.Parse(response.AdditionalProperties["total_duration"].ToString());
-            var toolDuration = duration - totalDurationAnalysis;
-            response.AdditionalProperties.Add("tool_duration", toolDuration);
-
+            if (response.AdditionalProperties.TryGetValue("total_duration", out var td) && TimeSpan.TryParse(td?.ToString(), out var totalDurationAnalysis))
+                response.AdditionalProperties.Add("tool_duration", duration - totalDurationAnalysis);
         }
 
         isLoading = false;
 
-
-        //messages.AddMessages(response); 
-
-
         chatSession.Messages = messages;
         chatResponse = response;
-        if(chatSession.DefaultTitle())
-        {
-            await SetChatMessageTitle();
-        }
 
+        if (chatSession.DefaultTitle())
+            await SetChatMessageTitle();
 
         chatSuggestions?.Update(messages);
         await ChatRepository.SaveAsync(chatSession);
-        //ChatMessageList.S
+    }
 
+    // UPDATED: use the helper above
+    private async Task AddUserMessageAsync(ChatMessage userMessage)
+    {
+        var o = Health.Get(HealthDomain.Ollama);
+        if (o.Level != HealthLevel.Healthy)
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", o.Error ?? "Ollama not reachable.", "Chat");
+            return;
+        }
+
+        CancelAnyCurrentResponse();
+
+        messages.Add(userMessage);
+        chatSuggestions?.Clear();
+        await chatInput!.FocusAsync();
+
+        currentResponseCancellation = new();
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        var filteredMessages = FilterChatMessages(messages);
+         await GenerateAssistantResponseStreamingAsync(filteredMessages);
+    }
+
+    // NEW: handle inline user-message edit → truncate future → regenerate
+    private async Task OnUserEditSubmit((ChatMessage message, string newText) edit)
+    {
+        var (msg, newText) = edit;
+
+        CancelAnyCurrentResponse();
+
+        var idx = messages.FindIndex(m => m.MessageId == msg.MessageId);
+        if (idx < 0) idx = messages.IndexOf(msg);
+        if (idx < 0) return;
+
+        // update the edited user message
+        messages[idx] = new (ChatRole.User, newText);
+        try
+        {
+           // messages[idx].Contents?.Clear();
+           // messages[idx].Contents?.Add(new TextContent(newText));
+        }
+        catch { /* safe no-op if types differ */ }
+
+        // drop everything after the edited message
+        if (idx < messages.Count - 1)
+            messages.RemoveRange(idx + 1, messages.Count - (idx + 1));
+
+        chatResponse = null;
+        isLoading = true;
+        await InvokeAsync(StateHasChanged);
+
+        var filtered = FilterChatMessages(messages);
+        await GenerateAssistantResponseStreamingAsync(filtered);
     }
 
     private List<ChatMessage> FilterChatMessages(List<ChatMessage> messagesToFilter)
@@ -380,19 +542,44 @@
         }
 
     }
+    private void OnStatusMessageHandler(string msg)
+    {
+        _ = ShowToastAsync(msg); // fire-and-forget
+    }
+
+    private async Task ShowToastAsync(string msg)
+    {
+        try
+        {
+            if (msg.StartsWith("TOAST|", StringComparison.Ordinal))
+            {
+                var parts = msg.Split('|', 4);
+                var level = parts.Length > 1 ? parts[1] : "info";      // info|success|warning|error
+                var title = parts.Length > 2 ? parts[2] : "Notification";
+                var body = parts.Length > 3 ? parts[3] : "";
+
+                await JSRuntime.InvokeVoidAsync($"GLOBAL.toastrInterop.{level}", body, title);
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", msg, "Info");
+            }
+        }
+        catch (Exception ex) { await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", ex.Message, "Error"); }
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            State.OnStatusMessage += async msg =>
-            {
-                await JSRuntime.InvokeVoidAsync(
-                    "GLOBAL.toastrInterop.info",
-                    msg,
-                    "Info"
-                );
-            }; _ref ??= DotNetObjectReference.Create(this);
-
+            State.OnStatusMessage -= OnStatusMessageHandler;
+            State.OnStatusMessage += OnStatusMessageHandler;
+            _ref ??= DotNetObjectReference.Create(this);
+         //   ClientState.OnChatLoaderMessage += async (_, msg) =>
+//{
+         //   if (!string.IsNullOrWhiteSpace(msg))
+         //           await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", msg, "Tools");
+          //  };
             // HEALTH → initial toast
             _health = Health.Snapshot;
 
@@ -498,6 +685,7 @@
     {
         currentResponseCancellation?.Cancel();
         if (_healthHandler is not null) Health.Changed -= _healthHandler;
+        State.OnStatusMessage -= OnStatusMessageHandler;
     }
 
 

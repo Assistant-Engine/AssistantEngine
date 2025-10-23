@@ -26,7 +26,12 @@
     }
 
     <ModelSelector @ref="modelSelectDD" OnSelect="@HandleModelAssistantSelected" />
+    <button id="evaluations-btn" class="btn evaluations-btn" @onclick="@ToggleEvaluations">
+        <i class="fi fi-br-alarm-clock"></i>
+        <span>Evaluations</span>
+    </button>
 
+    <EvaluationsPanel Visible="@showEvaluations" OnClose="ToggleEvaluations" />
     <button id="toggleThemeBtn" class="toggle-theme-btn btn">
         <i class="fi fi-br-sun"></i>
     </button>
@@ -44,6 +49,7 @@
 </div>
 
 @code {
+
     private ModelDropdown modelDD;
     private ModelSelector modelSelectDD;
 
@@ -57,7 +63,16 @@
     [Parameter] public EventCallback OpenModalRequested { get; set; }
 
     [Parameter] public EventCallback OnStateChange { get; set; }
+    // add these fields/method
+    private bool showEvaluations;
+    private Task ToggleEvaluations()
+    {
+        showEvaluations = !showEvaluations;
+        return InvokeAsync(StateHasChanged);
+    }
 
+    // remove this parameter (no longer used)
+    [Parameter] public EventCallback OnToggleEvaluations { get; set; }
     private async Task HandleModelSelected(OllamaSharp.Models.Model model)
     {
         await OnStateChange.InvokeAsync();

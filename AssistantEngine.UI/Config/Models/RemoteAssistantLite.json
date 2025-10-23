@@ -62,10 +62,10 @@
   "Databases": [
   ],
   "EnabledFunctions": [
+    "SendHttpRequest",
     "SearchDatabase",
     "SearchCode",
     "SearchAsync",
-    "GetWeather",
     "GetKnownDatabases",
     "ExecuteSQL",
     "SearchDatabaseSchema",
@@ -75,7 +75,11 @@
     "ListFileEntries",
     "ReadFile",
     "WriteFile",
-    "DeleteFile"
+    "DeleteFile",
+    "AddEvaluationAt",
+    "AddEvaluationRecurring",
+    "ListEvaluations",
+    "CancelEvaluation"
   ],
   "Description": "Welcome to Assistant Engine…",
   "EnableThinking": true,

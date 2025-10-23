@@ -1,0 +1,100 @@
+﻿@using AssistantEngine.UI.Services.Implementation.Notifications
+@using AssistantEngine.UI.Services.Notifications
+@inject IEvaluationStore Store
+
+<div class="ae-evals @(Visible ? "ae-evals--show" : "ae-evals--hide")">
+    <div class="ae-evals__header">
+        <h4 class="ae-evals__title">Scheduled Evaluations</h4>
+        <div>
+            <button class="ae-btn ae-btn--sm" @onclick="@Load">Refresh</button>
+
+            <button class="ae-btn ae-btn--sm ae-btn--ghost" @onclick="OnClose">Close</button>
+
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="ae-evals__loading">Loading…</div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="ae-evals__empty">No evaluations.</div>
+    }
+    else
+    {
+        <table class="ae-evals__table">
+            <thead>
+                <tr>
+                    <th>State</th>
+                    <th>Next</th>
+                    <th>Instruction</th>
+                    <th>Model</th>
+                    <th>Interval</th>
+                    <th>Last</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in items)
+                {
+                    <tr>
+                        <td>@e.State</td>
+                        <td>@(e.NextCheckUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
+                        <td class="ae-evals__instr" title="@e.Instruction">@e.Instruction</td>
+                        <td>@e.ModelConfigId</td>
+                        <td>@(e.Repeat ? $"{e.IntervalSeconds ?? 0}s" : "-")</td>
+                        <td>@(e.LastCheckUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")</td>
+                        <td>
+                            @if (e.State != EvalState.Disabled && e.State != EvalState.Completed)
+                            {
+                                <button class="ae-btn ae-btn--xs ae-btn--danger" @onclick="() => Cancel(e.Id)">Cancel</button>
+                            }
+                        </td>
+                    </tr>
+                    @if (!string.IsNullOrWhiteSpace(e.ScratchpadJson))
+                    {
+                        <tr class="ae-evals__state-row">
+                            <td colspan="7">
+                                <details>
+                                    <summary>State</summary>
+                                    <pre class="ae-evals__state">@e.ScratchpadJson</pre>
+                                </details>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private List<ScheduledEvaluation> items = new();
+    private bool loading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && items.Count == 0) await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        var list = await Store.ListAsync();
+        items = list
+          .OrderByDescending(x => x.NextCheckUtc ?? x.LastCheckUtc)
+          .ToList();
+        loading = false;
+        StateHasChanged();
+    }
+
+    private async Task Cancel(Guid id)
+    {
+        await Store.CancelAsync(id);
+        await Load();
+    }
+}

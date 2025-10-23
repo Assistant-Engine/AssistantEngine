@@ -1,11 +1,33 @@
-@using System.Runtime.CompilerServices
+﻿@using System.Runtime.CompilerServices
 @using System.Text.RegularExpressions
 @using System.Linq
-
+@inject IJSRuntime JS
 @if (Message.Role == ChatRole.User)
 {
     <div class="user-message">
-        @Message.Text
+
+        
+        @if (_editing)
+        {
+            <div class="user-message-inner editing">
+                <textarea class="user-edit-text" @bind="_draft"></textarea>
+            </div>
+            <div class="msg-actions">
+                <button class="btn btn-send" @onclick="SubmitEdit">Send</button>
+                <button class="btn btn-cancel" @onclick="CancelEdit">Cancel</button>
+            </div>
+        }
+        else
+        {
+            <div class="user-message-inner">
+                @Message.Text
+                </div>
+            <div class="msg-actions">
+                <button class="icon-btn" title="Edit" @onclick="BeginEdit"><i class="fi fi-br-pencil"></i></button>
+                <button class="icon-btn" title="Copy" @onclick="() => Copy(Message.Text)"><i class="fi fi-br-copy"></i></button>
+            </div>
+        }
+       
     </div>
 }
 else if (Message.Role == ChatRole.Assistant)
@@ -16,12 +38,32 @@ else if (Message.Role == ChatRole.Assistant)
         .Where(s => !string.IsNullOrWhiteSpace(s))
         .ToList();
 
+    var rawTexts = (Message.Contents ?? Enumerable.Empty<AIContent>())
+        .OfType<TextContent>()
+        .Select(t => t.Text)
+        .Where(s => !string.IsNullOrWhiteSpace(s))
+        .ToList();
+
+    // 2) strip <think>… (even if not closed yet) from visible body
+    var displayTexts = rawTexts
+        .Select(t => ThinkStripRegex.Replace(t, string.Empty))
+        .Where(s => !string.IsNullOrWhiteSpace(s))
+        .ToList();
+
+    if (InProgress && rawTexts.Count > 0)
+    {
+        var sourceAll = string.Join("", rawTexts);
+        ParseThoughts(sourceAll);   // updates your Thoughts list live while streaming
+    }
+
+    // 4) now compute flags and render
     bool hasThoughts = (Thoughts ?? Enumerable.Empty<string>()).Any(t => !string.IsNullOrWhiteSpace(t));
-    bool hasText = texts.Any(t => !string.IsNullOrWhiteSpace(Regex.Replace(t, @"<think>[\s\S]*?</think>", "", RegexOptions.Singleline)));
+    bool hasText = displayTexts.Any();
     bool hasCits = (citations?.Any() ?? false);
     bool hasSearch = (Message.Contents ?? Enumerable.Empty<AIContent>())
-                        .OfType<FunctionCallContent>()
-                        .Any(f => f.Name == "Search");
+        .OfType<FunctionCallContent>()
+        .Any(f => f.Name == "Search");
+
 
     if (hasThoughts || hasText || hasCits || hasSearch)
     {
@@ -31,7 +73,15 @@ else if (Message.Role == ChatRole.Assistant)
                     <svg class="icon"><use xlink:href="#call-center" /></svg>
                 </div>
             </div>
-            <div class="assistant-message-header">Assistant</div>
+
+       
+            <div class="assistant-message-header">Assistant
+                @if (InProgress)
+                {
+                    <div class="streaming-loader1"></div>
+                }
+            </div>
+    
             <div class="assistant-message-text">
 
                 @* render ALL thoughts once *@
@@ -47,7 +97,7 @@ else if (Message.Role == ChatRole.Assistant)
                         <span class="preview">@lines.FirstOrDefault()</span>
                         @if (lines.Length > 1)
                         {
-                            <span>�</span>
+                            <span>…</span>
                             <span class="more" style="display:none">
                                 @for (int i = 1; i < lines.Length; i++)
                                 {
@@ -61,7 +111,7 @@ else if (Message.Role == ChatRole.Assistant)
                 }
 
                 @* render each text content (without duplicating thoughts) *@
-                @foreach (var t in texts)
+                @foreach (var t in displayTexts)
                 {
                     <assistant-message markdown="@t"></assistant-message>
                 }
@@ -98,7 +148,13 @@ else if (Message.Role == ChatRole.Assistant)
                 {
                     <ChatCitation File="@citation.File" PageNumber="@citation.Page" Quote="@citation.Quote" />
                 }
+                <div class="msg-actions">
+                    <button class="icon-btn" title="Copy" @onclick="() => Copy(string.Join('\n', texts))">
+                        <i class="fi fi-br-copy"></i>
+                    </button>
+                </div>
             </div>
+         
         </div>
     }
 }
@@ -107,10 +163,15 @@ else if (Message.Role == ChatRole.Assistant)
 @code {
     private static readonly ConditionalWeakTable<ChatMessage, ChatMessageItem> SubscribersLookup = new();
     private static readonly Regex CitationRegex = new(@"<citation filename='(?<file>[^']*)' page_number='(?<page>\d*)'>(?<quote>.*?)</citation>", RegexOptions.NonBacktracking);
-private static readonly Regex ThinkRegex = new(
-  @"<think>(?<quote>[\s\S]*?)</think>",
-  RegexOptions.NonBacktracking
-);
+    private static readonly Regex ThinkBlockRegex = new(
+        @"<think>(?<quote>[\s\S]*?)(?:</think>|$)",
+        RegexOptions.NonBacktracking
+    );
+
+    private static readonly Regex ThinkStripRegex = new(
+        @"<think>[\s\S]*?(?:</think>|$)",
+        RegexOptions.NonBacktracking
+    );
     private List<(string File, int? Page, string Quote)>? citations;
     private List<string> Thoughts = new();
     [Parameter, EditorRequired]
@@ -119,15 +180,36 @@ private static readonly Regex ThinkRegex = new(
     [Parameter]
     public bool InProgress { get; set;}
 
-    protected override void OnInitialized()
-    {
-        SubscribersLookup.AddOrUpdate(Message, this);
 
-        if (!InProgress && Message.Role == ChatRole.Assistant && Message.Text is { Length: > 0 } text)
-        {
-            ParseCitations(text);
-            ParseThoughts(text);
-        }
+    [Parameter]
+    public EventCallback<(ChatMessage message, string newText)> OnEditSubmit { get; set; }
+
+    private bool _editing;
+    private string? _draft;
+
+    private void BeginEdit()
+    {
+        _draft = Message.Text;
+        _editing = true;
+    }
+
+    private async Task SubmitEdit()
+    {
+        var txt = _draft?.Trim() ?? string.Empty;
+        _editing = false;
+        await OnEditSubmit.InvokeAsync((Message, txt));
+    }
+
+    private void CancelEdit()
+    {
+        _editing = false;
+        _draft = null;
+    }
+
+    private async Task Copy(string? s)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", s ?? string.Empty);
+        await JS.InvokeVoidAsync("GLOBAL.toastrInterop.success", "Copied to clipboard", "Copy");
     }
 
     public static void NotifyChanged(ChatMessage source)
@@ -137,6 +219,25 @@ private static readonly Regex ThinkRegex = new(
             subscriber.StateHasChanged();
         }
     }
+    private string GetCombinedText()
+        => string.Concat((Message.Contents ?? Enumerable.Empty<AIContent>())
+            .OfType<TextContent>()
+            .Select(t => t.Text ?? string.Empty));
+
+    // CHANGE: re-parse on every update (works for streaming)
+    protected override void OnParametersSet()
+    {
+        SubscribersLookup.AddOrUpdate(Message, this);
+
+        var source = Message.Text ?? GetCombinedText();
+        if (Message.Role == ChatRole.Assistant && !string.IsNullOrEmpty(source))
+        {
+            ParseCitations(source);
+            ParseThoughts(source);
+        }
+    }
+
+
 
     private void ParseCitations(string text)
     {
@@ -147,8 +248,8 @@ private static readonly Regex ThinkRegex = new(
     }
     private void ParseThoughts(string text)
     {
-        var matches = ThinkRegex.Matches(text);
-        Thoughts = matches.Any()
+        var matches = ThinkBlockRegex.Matches(text);
+        Thoughts = matches.Count > 0
             ? matches.Select(m => m.Groups["quote"].Value).ToList()
             : new List<string>();
     }

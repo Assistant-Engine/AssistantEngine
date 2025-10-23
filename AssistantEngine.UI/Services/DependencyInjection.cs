@@ -9,10 +9,12 @@ using AssistantEngine.UI.Services.Implementation.Health;
 using AssistantEngine.UI.Services.Implementation.Ingestion;
 using AssistantEngine.UI.Services.Implementation.Ingestion.Chunks;
 using AssistantEngine.UI.Services.Implementation.Ingestion.Embedding;
+using AssistantEngine.UI.Services.Implementation.Notifications;
 using AssistantEngine.UI.Services.Implementation.Ollama;
 using AssistantEngine.UI.Services.Implementation.Startup;
 using AssistantEngine.UI.Services.Models;
 using AssistantEngine.UI.Services.Models.Ingestion;
+using AssistantEngine.UI.Services.Notifications;
 using AssistantEngine.UI.Services.Options;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -60,10 +62,13 @@ public static class DependencyInjection
         services.AddHttpClient<WebSearchTool>();
         services.Scan(scan => scan
             .FromAssemblyOf<ITool>()
-            .AddClasses(c => c.InNamespaces("AssistantEngine.Services.Implementation.Tools"))
+            .AddClasses(c => c.InNamespaces("AssistantEngine.Services.Implementation.Tools").AssignableTo<ITool>())
             .AsImplementedInterfaces()
             .WithTransientLifetime());
 
+
+        services.AddSingleton<IEvaluationStore, InMemoryEvaluationStore>();
+        services.AddHostedService<EvaluationSchedulerService>();
         // Chat / Ollama client factories
         services.AddSingleton<IOllamaClientResolver, OllamaClientResolver>();
         services.AddSingleton<IChatRepository, FileChatRepository>();
@@ -98,7 +103,7 @@ public static class DependencyInjection
             return (IEmbeddingGenerator<string, Embedding>)resolver.For(state.Config, modelId);
         });
 
-        services.AddScoped<IToolStatusNotifier, ToolStatusNotifier>();
+        services.AddSingleton<IToolStatusNotifier, ToolStatusNotifier>();
         services.AddScoped<ChatClientState>();
         services.AddScoped<Func<AssistantConfig>>(sp =>
         {
