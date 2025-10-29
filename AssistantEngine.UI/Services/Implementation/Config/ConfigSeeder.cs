@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 
@@ -40,6 +41,7 @@ namespace AssistantEngine.UI.Services.Implementation.Config
                 using var ms = new MemoryStream();
                 s.CopyTo(ms);
                 ms.Position = 0;
+
 
                 // If a file with same model Id already exists, skip writing to avoid duplicates
                 string? newId = null;

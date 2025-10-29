@@ -5,7 +5,7 @@ using System.ComponentModel;
 
 namespace AssistantEngine.Services.Implementation.Tools;
 
-public sealed class ScheduleEvaluationTool : ITool
+public class ScheduleEvaluationTool : ITool
 {
     private readonly IEvaluationStore _store; private readonly Func<AssistantConfig> _getConfig; private readonly IToolStatusNotifier _notifier;
     public ScheduleEvaluationTool(IEvaluationStore store, Func<AssistantConfig> getConfig, IToolStatusNotifier notifier)
