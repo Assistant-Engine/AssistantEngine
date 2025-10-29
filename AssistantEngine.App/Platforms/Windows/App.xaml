@@ -6,11 +6,8 @@
     xmlns:local="using:AssistantEngine.App.WinUI">
     <maui:MauiWinUIApplication.Resources>
         <ResourceDictionary>
-          
-            <!-- Theme dictionaries -->
+            <!-- Theme dictionaries MUST come before other items -->
             <ResourceDictionary.ThemeDictionaries>
-
-           
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="TitleBarBackgroundBrush" Color="#F3F3F3"/>
                     <SolidColorBrush x:Key="TitleBarForegroundBrush" Color="#1E1E1E"/>
@@ -21,23 +18,28 @@
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
-            <!-- Title bar template -->
+            <FontFamily x:Key="TitleBarFontFamily">ms-appx:///Resources/OpenSans-Regular.ttf#Open Sans</FontFamily>
+
             <DataTemplate x:Key="MauiAppTitleBarTemplate">
                 <Grid Height="48">
                     <Border Background="{ThemeResource TitleBarBackgroundBrush}"/>
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="12,0,8,0">
                         <Image Width="20" Height="20" Stretch="Uniform" VerticalAlignment="Center" Margin="0,0,8,0">
                             <Image.Source>
-                                <BitmapImage UriSource="/Resources/AppIcon/favicon.ico" />
+                                <BitmapImage UriSource="/Resources/AppIcon/favicon.ico"/>
                             </Image.Source>
                         </Image>
-                        <TextBlock Text="Assistant Engine" FontWeight="Bold" Foreground="{ThemeResource TitleBarForegroundBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="Assistant Engine"
+                   FontFamily="{StaticResource TitleBarFontFamily}"
+                   FontWeight="Bold"
+                   Foreground="{ThemeResource TitleBarForegroundBrush}"
+                   VerticalAlignment="Center"/>
                     </StackPanel>
                     <Grid x:Name="DragRegion"/>
                 </Grid>
             </DataTemplate>
-
         </ResourceDictionary>
+
     </maui:MauiWinUIApplication.Resources>
 
 </maui:MauiWinUIApplication>

@@ -1,6 +1,7 @@
 ﻿using AssistantEngine.Factories;
 using AssistantEngine.Services.Implementation;
 using AssistantEngine.Services.Implementation.Tools;
+using AssistantEngine.UI.Services.AppDatabase;
 using AssistantEngine.UI.Services.Implementation.Chat;
 using AssistantEngine.UI.Services.Implementation.Config;
 using AssistantEngine.UI.Services.Implementation.Database;
@@ -9,6 +10,7 @@ using AssistantEngine.UI.Services.Implementation.Health;
 using AssistantEngine.UI.Services.Implementation.Ingestion;
 using AssistantEngine.UI.Services.Implementation.Ingestion.Chunks;
 using AssistantEngine.UI.Services.Implementation.Ingestion.Embedding;
+using AssistantEngine.UI.Services.Implementation.MCP;
 using AssistantEngine.UI.Services.Implementation.Notifications;
 using AssistantEngine.UI.Services.Implementation.Ollama;
 using AssistantEngine.UI.Services.Implementation.Startup;
@@ -16,6 +18,8 @@ using AssistantEngine.UI.Services.Models;
 using AssistantEngine.UI.Services.Models.Ingestion;
 using AssistantEngine.UI.Services.Notifications;
 using AssistantEngine.UI.Services.Options;
+using Dapper;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -58,6 +62,8 @@ public static class DependencyInjection
         services.AddSingleton<IEnumerable<AssistantConfig>>(modelConfigs);
         foreach (var cfg in modelConfigs) services.AddSingleton(cfg);
 
+   //     var appDbConn = $"Data Source={appConfigStore.Current.AppDBFilePath}";
+
         // Tools + http
         services.AddHttpClient<WebSearchTool>();
         services.Scan(scan => scan
@@ -65,9 +71,33 @@ public static class DependencyInjection
             .AddClasses(c => c.InNamespaces("AssistantEngine.Services.Implementation.Tools").AssignableTo<ITool>())
             .AsImplementedInterfaces()
             .WithTransientLifetime());
+        services.AddSingleton<IMcpRegistry, McpRegistry>();
+
+        SqlMapper.AddTypeHandler(new SqliteDateTimeOffsetHandler());
+        // BEFORE: services.AddSingleton<IEvaluationStore, InMemoryEvaluationStore>();
+
+        // using Microsoft.Data.Sqlite;
+
+        services.AddSingleton<IEvaluationStore>(sp =>
+        {
+            var cfg = sp.GetRequiredService<IAppConfigStore>();
+            var dbPath = cfg.Current.AppDBFilePath;
+            Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+
+            var cs = new SqliteConnectionStringBuilder
+            {
+                DataSource = dbPath,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+                Cache = SqliteCacheMode.Shared
+            }.ToString();
+
+            AppDbInitializer.EnsureSchemaAsync(cs).GetAwaiter().GetResult(); // <-- ensure here
+
+            return new SqlLiteEvaluationStore(cs);
+        });
 
 
-        services.AddSingleton<IEvaluationStore, InMemoryEvaluationStore>();
+
         services.AddHostedService<EvaluationSchedulerService>();
         // Chat / Ollama client factories
         services.AddSingleton<IOllamaClientResolver, OllamaClientResolver>();

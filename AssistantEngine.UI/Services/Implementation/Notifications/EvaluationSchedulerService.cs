@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using System.ComponentModel;
 using System.Reflection;
 
+
 namespace AssistantEngine.UI.Services.Notifications;
 // so a couple of things about this 
 //should we have a page where we can view Evaluations seperately for debugging etc or is it not worth it.
@@ -114,118 +115,118 @@ public sealed class EvaluationSchedulerService : BackgroundService
     //i think we need to change this to a json model. so this is clearer the communication
     private async Task<EvaluationResult> RunModelEvaluationAsync(ScheduledEvaluation eval, CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var services = scope.ServiceProvider;
-        
-        var cfg = _configs.GetById(eval.ModelConfigId);
-        var resolver = services.GetRequiredService<IOllamaClientResolver>();
-        var clientUnresolved = (IChatClient)resolver.For(cfg, cfg.AssistantModel.ModelId);
-        var client = clientUnresolved.AsBuilder().UseFunctionInvocation().Build();
-        // Tools from the same scoped provider
-        var options = cfg.WithEnabledTools(services);
-
-        // STRICT protocol so the scheduler can act deterministically:
-        var system = new ChatMessage(ChatRole.System, """
-        You run in the background and return evaluation notifications to the user.
-        You must follow the instruction. Dont do anything else.
-        The notify object is used to send the notification upon pass.
-        You may CALL TOOLS to check conditions or to complete the user task if neccessary.
-        Never use an AddEvaluation tool.
-
-
-        Return **only JSON**, with no extra text, matching this schema:
-        {
-          "result": "pass | defer | error",
-          "state": { ...optional... },
-          "notify": {
-            "level": "info | success | warning | error",
-            "title": "string",
-            "message": "string"
-          }
-        }
-
-        Rules:
-        - If condition passed and required actions/tools executed → result = "pass"
-        - If not yet → result = "defer"
-        - On unrecoverable failure → result = "error" (include error message)
-        - Keep JSON minimal — omit unnecessary properties
-        """);
-
-
-        var user = new ChatMessage(ChatRole.User,
-            $"NowUtc: {DateTimeOffset.UtcNow:O}\n" +
-            $"Instruction:\n{eval.Instruction}\n" +
-            $"PreviousStateJson:\n{eval.ScratchpadJson ?? "{}"}");
-
-        var resp = await client.GetResponseAsync(new List<ChatMessage> { system, user }, options, ct);
-
-        var text = resp.Messages.LastOrDefault(m => m.Role == ChatRole.Assistant)?.Text ?? string.Empty;
-
-        // Try to parse JSON (assistant must output JSON only per system prompt)
-        string json = ""; 
         EvaluationResult result = EvaluationResult.Error;
         try
         {
-            var desanText =ChatMessageExtensions.RemoveThinkTags(text);
-            // If the model accidentally wraps JSON with code fences or whitespace, extract inner JSON
-            json = ExtractJson(desanText);  //error from here // find where we put remove think tags
+            using var scope = _scopeFactory.CreateScope();
+            var services = scope.ServiceProvider;
 
-            var reply = System.Text.Json.JsonSerializer.Deserialize<EvaluationResponse>(json);
+            var cfg = _configs.GetById(eval.ModelConfigId);
+            var resolver = services.GetRequiredService<IOllamaClientResolver>();
+            var clientUnresolved = (IChatClient)resolver.For(cfg, cfg.AssistantModel.ModelId);
+            var client = clientUnresolved.AsBuilder().UseFunctionInvocation().Build();
+            // Tools from the same scoped provider
+            var options = cfg.WithEnabledTools(services);
 
-            if (reply?.Result is null)
+            // STRICT protocol so the scheduler can act deterministically:
+            var system = new ChatMessage(ChatRole.System, """
+            You run in the background and return evaluation notifications to the user.
+            You must follow the instruction. Dont do anything else.
+            The notify object is used to send the notification upon pass.
+            You may CALL TOOLS to check conditions or to complete the user task if neccessary.
+            Never use an AddEvaluation tool.
+
+
+            Return **only JSON**, with no extra text, matching this schema:
             {
-                _notifier.StatusMessage("TOAST|warning|Evaluator|No 'result' in JSON.");
-                return EvaluationResult.Error;
+              "result": "pass | defer | error",
+              "state": { ...optional... },
+              "notify": {
+                "level": "info | success | warning | error",
+                "title": "string",
+                "message": "string"
+              }
             }
 
-            switch (reply.Result.ToLowerInvariant())
+            Rules:
+            - If condition passed and required actions/tools executed → result = "pass"
+            - If not yet → result = "defer"
+            - On unrecoverable failure → result = "error" (include error message)
+            - Keep JSON minimal — omit unnecessary properties
+            """);
+
+
+            var user = new ChatMessage(ChatRole.User,
+                $"NowUtc: {DateTimeOffset.UtcNow:O}\n" +
+                $"Instruction:\n{eval.Instruction}\n" +
+                $"PreviousStateJson:\n{eval.ScratchpadJson ?? "{}"}");
+
+            var resp = await client.GetResponseAsync(new List<ChatMessage> { system, user }, options, ct);
+
+            var text = resp.Messages.LastOrDefault(m => m.Role == ChatRole.Assistant)?.Text ?? string.Empty;
+
+            // Try to parse JSON (assistant must output JSON only per system prompt)
+            string json = "";
+          
+            try
             {
-                case "pass": result = EvaluationResult.Pass; break;
-                case "defer": result = EvaluationResult.Defer; break;
-                case "error": result = EvaluationResult.Error; break;
-                default:
-                    _notifier.StatusMessage($"TOAST|warning|Evaluator|Unknown result '{reply.Result}'.");
-                    result = EvaluationResult.Error;
-                    break;
+                var desanText = ChatMessageExtensions.RemoveThinkTags(text);
+                // If the model accidentally wraps JSON with code fences or whitespace, extract inner JSON
+                json = ExtractJson(desanText);  //error from here // find where we put remove think tags
+
+                var reply = System.Text.Json.JsonSerializer.Deserialize<EvaluationResponse>(json);
+
+                if (reply?.Result is null)
+                {
+                    _notifier.StatusMessage("TOAST|warning|Evaluator|No 'result' in JSON.");
+                    return EvaluationResult.Error;
+                }
+
+                switch (reply.Result.ToLowerInvariant())
+                {
+                    case "pass": result = EvaluationResult.Pass; break;
+                    case "defer": result = EvaluationResult.Defer; break;
+                    case "error": result = EvaluationResult.Error; break;
+                    default:
+                        _notifier.StatusMessage($"TOAST|warning|Evaluator|Unknown result '{reply.Result}'.");
+                        result = EvaluationResult.Error;
+                        break;
+                }
+
+                // Persist state if provided
+                if (reply.State is System.Text.Json.JsonElement s)
+                    eval.ScratchpadJson = s.GetRawText();
+
+                // On PASS, forward notify payload (if any) to toastr
+                if (result == EvaluationResult.Pass && reply.Notify is not null)
+                {
+                    var lvl = string.IsNullOrWhiteSpace(reply.Notify.Level) ? "success" : reply.Notify.Level!;
+                    var ttl = string.IsNullOrWhiteSpace(reply.Notify.Title) ? "Evaluation" : reply.Notify.Title!;
+                    var msg = reply.Notify.Message ?? "";
+                    _notifier.StatusMessage($"TOAST|{lvl}|{ttl}|{msg}");
+                }
+
+                // On ERROR with detail
+                if (result == EvaluationResult.Error && !string.IsNullOrWhiteSpace(reply.Error))
+                    _notifier.StatusMessage($"TOAST|error|Evaluator error|{reply.Error}");
             }
-
-            // Persist state if provided
-            if (reply.State is System.Text.Json.JsonElement s)
-                eval.ScratchpadJson = s.GetRawText();
-
-            // On PASS, forward notify payload (if any) to toastr
-            if (result == EvaluationResult.Pass && reply.Notify is not null)
+            catch (Exception ex)
             {
-                var lvl = string.IsNullOrWhiteSpace(reply.Notify.Level) ? "success" : reply.Notify.Level!;
-                var ttl = string.IsNullOrWhiteSpace(reply.Notify.Title) ? "Evaluation" : reply.Notify.Title!;
-                var msg = reply.Notify.Message ?? "";
-                _notifier.StatusMessage($"TOAST|{lvl}|{ttl}|{msg}");
+                Console.WriteLine(ex.Message);
+                Console.WriteLine(ex.StackTrace);
+                _notifier.StatusMessage($"TOAST|error|Evaluator JSON parse|{ex.Message}");
+                result = EvaluationResult.Error;
             }
-
-            // On ERROR with detail
-            if (result == EvaluationResult.Error && !string.IsNullOrWhiteSpace(reply.Error))
-                _notifier.StatusMessage($"TOAST|error|Evaluator error|{reply.Error}");
         }
         catch (Exception ex)
         {
+            Console.WriteLine(ex.Message);
+            Console.WriteLine(ex.StackTrace);
             _notifier.StatusMessage($"TOAST|error|Evaluator JSON parse|{ex.Message}");
             result = EvaluationResult.Error;
         }
 
-
-     /*   if (result == EvaluationResult.Pass)
-        {
-            var notify = TryParseNotify(text);
-            if (notify is not null)
-            {
-                // Format: TOAST|level|title|message  (UI will route to the right toastr fn)
-                var (level, title, message) = notify.Value;
-                _notifier.StatusMessage($"TOAST|{level}|{title}|{message}");
-            }
-        }*/
-
         return result;
-
     }
     static string ExtractJson(string text)
     {

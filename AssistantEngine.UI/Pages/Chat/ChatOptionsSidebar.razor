@@ -1,5 +1,6 @@
 ﻿@using System.Data.SqlClient
 @using AssistantEngine.Factories
+@using AssistantEngine.UI.Services
 @using AssistantEngine.UI.Services.Implementation.Config
 @using AssistantEngine.UI.Services.Implementation.Database
 @using AssistantEngine.UI.Services.Models
@@ -7,11 +8,12 @@
 @inherits LayoutComponentBase
 @inject IAssistantConfigStore ConfigStore;
 @inject ChatClientState clientState;
-@inject IDatabaseRegistry DbRegistry
+@inject IDatabaseRegistry DbRegistry;
+@inject IMcpRegistry McpRegistry;
 @if (showSidebar) //dont neccessarily need this here currently but is good for if we want to have hide here in future maybe
 {
     <aside class="chat-options-sidebar">
-        <h3>Assistant Options</h3>
+        <h3 class="nav-top">Assistant Options</h3>
 
 
         <section>
@@ -311,6 +313,128 @@
                 </button>
             </dl>
         </section>
+        <section id="mcp-section">
+            <h4>
+                <i class="fi fi-br-network-cloud"></i>
+                <span class="header-text-1">MCP Connectors</span>
+            </h4>
+            <dl>
+                @foreach (var conn in AssistantConfig.McpConnectors)
+                {
+                    <div class="mcp-connector-setting">
+                        <dt class="name-dt">
+                            Name:
+                            <button class="btn btn-sm btn-danger mt-2"
+                                    @onclick="@(() => RemoveConnector(conn))">
+                                <i class="fi-br-cross"></i>
+                            </button>
+                        </dt>
+                        <dd class="penalty1-op-inner">
+                            <InputText @bind-Value="conn.Id"
+                                       class="form-control"
+                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                        </dd>
+
+                        <dt>Server URL</dt>
+                        <dd class="tokencount-op-inner">
+                            <InputText @bind-Value="conn.ServerUrl"
+                                       class="form-control mot2"
+                                       placeholder="http://localhost:4001"
+                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                        </dd>
+
+                        <dt>Auth Token (optional)</dt>
+                        <dd class="tokencount-op-inner">
+                            <InputText @bind-Value="conn.AuthToken"
+                                       class="form-control mot2"
+                                       placeholder="Bearer token or API key"
+                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                        </dd>
+
+         
+                   
+                            @if (connectorTools.TryGetValue(conn.Id, out var toolNames) && toolNames.Any())
+                            {
+                            var modeClass = IsEditing(conn) ? "mcp-editing-on" : "mcp-editing-off";
+                            <dt class="d-flex align-items-center allowed-mcp-sec">
+                                <span class="me-2">Allowed Tools</span>
+
+                                <button type="button"
+                                        class="btn btn-sm btn-link p-0 m-0 text-decoration-none allow-mcp-btn"
+                                        title="Edit allowed tools"
+                                        @onclick="@(() => ToggleConnectorEdit(conn))">
+                                    <i class="fi fi-br-pencil"></i>
+                                </button>
+                            </dt>
+
+                            <dd class="penalty1-op-inner small">
+                                <div class="@($"mcp-tools-wrapper {modeClass}")">
+                                    <!-- VIEW MODE (badges only) -->
+                                    <div class="mcp-view-mode">
+                                        @if (conn.EnabledTools.Any())
+                                        {
+                                            @foreach (var t in conn.EnabledTools)
+                                            {
+                                                <span class="badge badge-1 me-1 mb-1 d-inline-block">@t</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <div class="text-muted tiny">
+                                                No tools enabled.
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- EDIT MODE (checkbox list) -->
+                                    <div class="mcp-edit-mode">
+                                        <div class="mcp-tools-list">
+                                            @foreach (var t in toolNames)
+                                            {
+                                                bool enabled = conn.EnabledTools.Contains(t);
+                                                <label class="form-check mcp-tool-choice d-flex align-items-center mb-1">
+                                                    <input type="checkbox"
+                                                           class="form-check-input me-2"
+                                                           checked="@enabled"
+                                                           @onchange="@((ChangeEventArgs e) => ToggleToolAllowed(conn, t, (bool)e.Value))" />
+                                                    <span class="badge badge-1">@t</span>
+                                                </label>
+                                            }
+                                        </div>
+                                        <div class="text-muted tiny">
+                                            Uncheck to disable a tool for this assistant.
+                                        </div>
+                                    </div>
+                                </div>
+                                </dd>
+
+                            <button class="save-connector-btn"
+                                    style="display:@(editedConnectors.Contains(conn.Id) ? "inline-block" : "none")"
+                                    @onclick="@(() => SaveConnector(conn))">
+                                Save Connector
+                            </button>
+                            }
+                            else
+                            {
+                                <button class="btn discover-tools-btn"
+                                        @onclick="@(() => DiscoverTools(conn))">
+                                    Connect
+                                </button>
+                              
+                            }
+                        
+
+
+
+                    </div>
+                }
+
+                <button class="btn btn-sm btn-outline-primary add-connector-btn"
+                        @onclick="AddConnector">
+                    Add Connector
+                </button>
+            </dl>
+        </section>
 
              <section>
             <h4><i class="fi fi-br-lock"></i><span class="header-text-1">Non-Configurable</span></h4>
@@ -366,6 +490,105 @@
     {
         showSidebar = !showSidebar;
     }
+
+    private HashSet<string> editedConnectors = new();
+    private Dictionary<string, List<string>> connectorTools = new();
+    // conn.Id -> tool name list
+
+
+    private void AddConnector()
+    {
+        AssistantConfig.McpConnectors ??= new();
+        var cfg = new McpConnectorConfig
+        {
+            Id = "New Connector",
+            ServerUrl = "http://localhost:4001"
+        };
+        AssistantConfig.McpConnectors.Add(cfg);
+        editedConnectors.Add(cfg.Id);
+    }
+
+    private void RemoveConnector(McpConnectorConfig conn)
+    {
+        AssistantConfig.McpConnectors.Remove(conn);
+        McpRegistry.Remove(conn.Id);
+        connectorTools.Remove(conn.Id);
+        clientState.StatusMessage($"Connector {conn.Id} removed.");
+    }
+
+    private async Task DiscoverTools(McpConnectorConfig conn)
+    {
+        try
+        {
+            var reg = await McpRegistry.RegisterAsync(conn);
+
+            var toolNames = reg.Tools
+                .Select(t => t.Name)
+                .Distinct()
+                .OrderBy(x => x)
+                .ToList();
+
+            connectorTools[conn.Id] = toolNames;
+
+            // if user hasn't manually chosen anything yet,
+            // auto-enable everything we just discovered
+            if (conn.EnabledTools == null)
+            {
+                conn.EnabledTools = new List<string>();
+            }
+
+            if (conn.EnabledTools.Count == 0)
+            {
+                conn.EnabledTools.AddRange(toolNames);
+            }
+
+            editedConnectors.Add(conn.Id);
+            clientState.StatusMessage(
+                $"Connected to {conn.Id}. {toolNames.Count} tools available, all enabled.");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            clientState.StatusMessage($"Failed to connect: {ex.Message}");
+        }
+    }
+
+
+    private void ToggleToolAllowed(McpConnectorConfig conn, string toolName, bool on)
+    {
+        if (on)
+        {
+            if (!conn.EnabledTools.Contains(toolName))
+                conn.EnabledTools.Add(toolName);
+        }
+        else
+        {
+            conn.EnabledTools.Remove(toolName);
+        }
+
+        editedConnectors.Add(conn.Id);
+    }
+    private HashSet<string> editingConnectors = new();
+
+    private void ToggleConnectorEdit(McpConnectorConfig conn)
+    {
+        // toggle conn.Id in the editing set
+        if (!editingConnectors.Add(conn.Id))
+            editingConnectors.Remove(conn.Id);
+    }
+
+    private bool IsEditing(McpConnectorConfig conn)
+        => editingConnectors.Contains(conn.Id);
+
+
+    private void SaveConnector(McpConnectorConfig conn)
+    {
+        // "Save" here just means mark clean in UI.
+        editedConnectors.Remove(conn.Id);
+        clientState.RefreshTools();
+        clientState.StatusMessage($"Connector {conn.Id} saved.");
+    }
+
     private string? _originalId;
 
     protected override void OnInitialized()

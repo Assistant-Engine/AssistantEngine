@@ -2,17 +2,11 @@
 @using AssistantEngine.UI.Services.Models
 @inject ChatClientState ClientState;
 
-<div class="chat-header-container main-background-gradient">
-    <div class="chat-header-controls">
-        <button class="btn-default" @onclick="@OnNewChat">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="new-chat-icon">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            New chat
-        </button>
-    </div>
+<div class="chat-header-container nav-top">
 
-    @if (ClientState?.OllamaClient is not null)
+
+
+   @* @if (ClientState?.OllamaClient is not null)
     {
         <ModelDropdown @ref="modelDD"
                        OpenModels="OpenModalRequested"
@@ -21,25 +15,41 @@
     }
     else
     {
-        <!-- Fallback UI when config/state is bad -->
         <span class="text-warning">Models unavailable (bad config)</span>
     }
-
-    <ModelSelector @ref="modelSelectDD" OnSelect="@HandleModelAssistantSelected" />
-    <button id="evaluations-btn" class="btn evaluations-btn" @onclick="@ToggleEvaluations">
+      <button id="evaluations-btn" class="btn evaluations-btn" @onclick="@ToggleEvaluations">
         <i class="fi fi-br-alarm-clock"></i>
         <span>Evaluations</span>
     </button>
 
     <EvaluationsPanel Visible="@showEvaluations" OnClose="ToggleEvaluations" />
-    <button id="toggleThemeBtn" class="toggle-theme-btn btn">
+
+
+       <button id="toggleThemeBtn" class="toggle-theme-btn btn">
         <i class="fi fi-br-sun"></i>
     </button>
+        <div class="chat-header-controls">
+        <button class="btn-default new-chat-button" @onclick="@OnNewChat">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="new-chat-icon">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            New chat
+        </button>
+    </div>
+    *@
+    <button class="chat-header-btn btn btn-sm btn-outline-secondary"
+            @onclick="OnToggleChatMessageSidebar">
+        <i class="fi fi-br-sidebar"></i>
+    </button>
+    <ConfigDropdown @ref="configDD" OnSelect="@HandleModelAssistantSelected" />
+  
+ 
 
     <button id="settings-btn"
-            class="btn btn-sm btn-outline-secondary"
-            @onclick="OnToggleSidebar">
-        @(IsSidebarVisible ? "Hide Options" : "Show Options")
+            class="chat-header-btn btn btn-sm btn-outline-secondary"
+            @onclick="OnToggleChatOptionsSidebar">
+        <i class="fi fi-br-sidebar-flip"></i>
+     
     </button>
 
     <button id="open-model-chat-button"
@@ -51,19 +61,15 @@
 @code {
 
     private ModelDropdown modelDD;
-    private ModelSelector modelSelectDD;
+    private ConfigDropdown configDD;
 
-    [Parameter] public EventCallback OnToggleSidebar { get; set; }
+    [Parameter] public EventCallback OnToggleChatOptionsSidebar { get; set; }
+    [Parameter] public EventCallback OnToggleChatMessageSidebar { get; set; }
     [Parameter] public bool IsSidebarVisible { get; set; }
     [Parameter] public EventCallback OnNewChat { get; set; }
-
-    /// Parent consumer of model selections
     [Parameter] public EventCallback OnStateSelected { get; set; }
-
     [Parameter] public EventCallback OpenModalRequested { get; set; }
-
     [Parameter] public EventCallback OnStateChange { get; set; }
-    // add these fields/method
     private bool showEvaluations;
     private Task ToggleEvaluations()
     {
@@ -71,7 +77,6 @@
         return InvokeAsync(StateHasChanged);
     }
 
-    // remove this parameter (no longer used)
     [Parameter] public EventCallback OnToggleEvaluations { get; set; }
     private async Task HandleModelSelected(OllamaSharp.Models.Model model)
     {

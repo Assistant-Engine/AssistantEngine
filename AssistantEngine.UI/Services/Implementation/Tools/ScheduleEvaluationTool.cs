@@ -48,7 +48,7 @@ public sealed class ScheduleEvaluationTool : ITool
 
     [Description("Cancel a scheduled evaluation by Id.")]
     public Task<bool> CancelEvaluationAsync([Description("Evaluation Id (Guid).")] string id)
-        => _store.CancelAsync(Guid.Parse(id));
+        => _store.CancelAsync(id);
 
     [Description("List scheduled evaluations as JSON.")]
     public async Task<string> ListEvaluationsAsync()

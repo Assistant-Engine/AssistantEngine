@@ -54,7 +54,7 @@
       }
     }
   ],
-  "ModelProviderUrl": "http://178.196.27.11:11434",
+  "ModelProviderUrl": "https://ollama.assistantengine.ai",
   "DescribeDatabaseWithModel": true,
   "ModelProvider": "Ollama",
   "SystemPrompt": "You are a specialized assistant that answers questions using retrieved information. Format your answer in simple Markdown.",

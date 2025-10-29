@@ -8,6 +8,7 @@ using AssistantEngine.UI.Services.Implementation.Config;
 using AssistantEngine.UI.Services.Implementation.Database;
 using AssistantEngine.UI.Services.Implementation.Factories;
 using AssistantEngine.UI.Services.Implementation.Ingestion;
+using AssistantEngine.UI.Services.Implementation.MCP;
 using AssistantEngine.UI.Services.Models;
 using AssistantEngine.UI.Services.Models.Ingestion;
 using Microsoft.Extensions.AI;
@@ -156,26 +157,13 @@ namespace AssistantEngine.Factories
               
                 OllamaClient = _ollamaFactory(Config.AssistantModel.ModelId);
                 //ChatOptions = _opts.Get(Config.AssistantModelId);
-                ChatOptions = Config.AssistantModel;
-                if(Config.EnabledFunctions != null)
-                {
-                    // discover all [Description] methods on each tool and filter by EnabledFunctions
-                    var funcs = tools
-                                  .SelectMany(tool => tool.GetType()
-                                      .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                                      .Where(m => m.GetCustomAttribute<DescriptionAttribute>() != null)
-                                      .Select(m => AIFunctionFactory.Create(m, tool))
-                                  )
-                                  .Where(f => Config.EnabledFunctions.Contains(f.Name))
-                                  .ToArray();
+              
+                ChatOptions = Config.WithEnabledToolsAndMcp(_services);
 
-                    // override Tools with exactly those you picked up from DI
-                  
-                    ChatOptions.Tools = funcs;
-                }
-             
+               
+
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex.Message);
                 Console.WriteLine(ex.StackTrace);
@@ -208,6 +196,27 @@ namespace AssistantEngine.Factories
                 _dbRegistry.Register(dbConfig);
             }
 
+
+            // hydrate MCP connectors for this config
+            var mcp = _services.GetRequiredService<IMcpRegistry>();
+            foreach (var conn in Config.McpConnectors)
+            {
+                // fire and forget connect
+                _ = mcp.RegisterAsync(conn).ContinueWith(t =>
+                {
+                    if (t.Exception != null)
+                    {
+                        StatusMessage($"MCP '{conn.Id}' failed: {t.Exception.InnerException?.Message}");
+                    }
+                    else
+                    {
+                        StatusMessage($"MCP '{conn.Id}' connected.");
+                    }
+                });
+            }
+
+
+
             // trigger or reuse ingestion
             OnStatusMessage?.Invoke($"Ingesting data for “{id}”…");
             var ingestTask = _ingestionTasks.GetOrAdd(id, _ => IngestDataAsync(Config));
@@ -216,20 +225,15 @@ namespace AssistantEngine.Factories
             OnStatusMessage?.Invoke($"Model “{id}” ready");
 
             // wire up tools…
-            ChatOptions = Config.WithEnabledTools(_services);
-            if (Config.EnabledFunctions is not null)
-            {
-                var tools = _services.GetServices<ITool>();
-                var funcs = tools
-                                           .SelectMany(tool => tool.GetType()
-                                               .GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                                               .Where(m => m.GetCustomAttribute<DescriptionAttribute>() != null)
-                                               .Select(m => AIFunctionFactory.Create(m, tool))
-                                           )
-                                           .Where(f => Config.EnabledFunctions.Contains(f.Name))
-                                           .ToArray();
-                ChatOptions.Tools = funcs;
-            }
+            ChatOptions = Config.WithEnabledToolsAndMcp(_services);
+    
+            // start with built-in .NET tools (your ITool reflection path)
+      
+
+        }
+        public void RefreshTools()
+        {
+            ChatOptions = Config.WithEnabledToolsAndMcp(_services);
         }
         public async Task ReingestDatabases()
         {
@@ -254,6 +258,7 @@ namespace AssistantEngine.Factories
 
                     await _dataIngestor.DeleteSourceAsync(
                         "data-echoed-documents", "sql-table-chunks", dbSource.SourceId);
+                  
                   
 
                   

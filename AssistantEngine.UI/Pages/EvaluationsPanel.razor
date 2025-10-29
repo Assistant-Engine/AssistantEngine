@@ -1,0 +1,387 @@
+﻿@using AssistantEngine.UI.Services.Implementation.Notifications
+@using AssistantEngine.UI.Services.Notifications
+@inject IJSRuntime JS
+@inject IEvaluationStore Store
+
+<div class="ae-evals">
+    <div class="ae-evals__header nav-top">
+        <h4 class="ae-evals__title">Scheduled Evaluations</h4>
+        <div>
+            <button class="ae-btn ae-btn--sm" @onclick="@Load">
+                <i
+class=
+"fi fi-br-refresh"
+></i>
+                Refresh</button>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="ae-evals__loading">Loading…</div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="ae-evals__empty">No evaluations.</div>
+    }
+    else
+    {
+        <table class="ae-evals__table">
+            <thead>
+                <tr>
+                    <th>State</th>
+                    <th>Next</th>
+                    <th>Instruction</th>
+                    <th>Model</th>
+                    <th>Interval</th>
+                    <th>Last</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var e in items)
+                {
+                    <tr @onclick="@(() => ToggleDetails(e))" style="cursor:pointer">
+                        <!-- State -->
+                        <td>
+                            <span class="ae-badge @(e.State switch {
+                                EvalState.Pending => "ae-badge--pending",
+                                EvalState.Disabled => "ae-badge--disabled",
+                                EvalState.Completed => "ae-badge--completed",
+                                EvalState.Paused => "ae-badge--paused",
+                                _ => "ae-badge--pending"
+                            })">@e.State</span>
+                        </td>
+
+                        <!-- Next -->
+                        <td>
+                            @(e.NextCheckUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")
+                        </td>
+
+                        <!-- Instruction -->
+                        <td class="ae-evals__instr" title="@e.Instruction">
+                            @e.Instruction
+                        </td>
+
+                        <!-- Model -->
+                        <td>
+                            @e.ModelConfigId
+                        </td>
+
+                        <!-- Interval -->
+                        <td>
+                            @(e.Repeat ? $"{e.IntervalSeconds ?? 0}s" : "-")
+                        </td>
+
+                        <!-- Last -->
+                        <td>
+                            @(e.LastCheckUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")
+                        </td>
+
+                        <!-- Actions / Details -->
+                        <td>
+                         <button class="ae-btn--menu" @onclick="@(() => ToggleDetails(e))" @onclick:stopPropagation="true">
+    <i class="fi-br-menu-burger"></i>
+</button>
+
+                        </td>
+                    </tr>
+
+                    @if (expandedId == e.Id)
+                    {
+                        <tr class="ae-evals__details-row">
+                            <td colspan="7">
+                                <div class="ae-details">
+                                    <div class="ae-details__header">
+                                        <div><strong>Evaluation:</strong> @e.Id</div>
+                    <div class="ae-details__actions">
+    @if (editingId == e.Id)
+    {
+        <button class="ae-btn ae-btn--xs ae-btn--primary" @onclick="SaveEdit">
+            <i class="fi-br-check"></i>
+            <span>Save</span>
+        </button>
+
+        <button class="ae-btn ae-btn--xs ae-btn--ghost" @onclick="CancelEdit">
+            <i class="fi-br-cross"></i>
+            <span>Cancel</span>
+        </button>
+    }
+    else
+    {
+        <button class="ae-btn ae-btn--xs" @onclick="@(() => BeginEdit(e))">
+            <i class="fi-br-edit"></i>
+            <span>Edit</span>
+        </button>
+
+        @if (e.State is not EvalState.Disabled and not EvalState.Completed)
+        {
+            <button class="ae-btn ae-btn--xs ae-btn--danger" @onclick="@(() => Cancel(e.Id))">
+                <i class="fi-br-pause"></i>
+                <span>Cancel</span>
+            </button>
+        }
+        else
+        {
+            <button class="ae-btn ae-btn--xs ae-btn--success" @onclick="@(() => Restart(e.Id))">
+                <i class="fi-br-play"></i>
+                <span>Restart</span>
+            </button>
+        }
+
+        <button class="ae-btn ae-btn--xs ae-btn--ghost" @onclick="@(() => Delete(e.Id))">
+            <i class="fi-br-trash"></i>
+            <span>Delete</span>
+        </button>
+    }
+
+    <button class="ae-btn ae-btn--xs ae-btn--ghost" @onclick="CloseDetails">
+        <i class="fi-br-angle-small-up"></i>
+        <span>Close</span>
+    </button>
+</div>
+
+                                    </div>
+
+                                    <div class="ae-details__grid">
+                                        <div>
+                                            <strong>State:</strong>
+                                            @if (editingId == e.Id)
+                                            {
+                                                <select @bind="editState">
+                                                    @foreach (var s in Enum.GetValues<EvalState>())
+                                                    {
+                                                        <option value="@s">@s</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else
+                                            {
+                                                @e.State
+                                            }
+                                        </div>
+
+                                        <div>
+                                            <strong>Model:</strong>
+                                            @if (editingId == e.Id)
+                                            {
+                                                <input @bind="editModelConfigId" />
+                                            }
+                                            else
+                                            {
+                                                @e.ModelConfigId
+                                            }
+                                        </div>
+
+                                        <div>
+                                            <strong>Repeat:</strong>
+                                            @if (editingId == e.Id)
+                                            {
+                                                <label>
+                                                    <input type="checkbox" @bind="editRepeat" />
+                                                    Repeat
+                                                </label>
+                                                <input type="number"
+                                                       style="width:90px"
+                                                       min="0"
+                                                       @bind="editInterval" />
+                                            }
+                                            else
+                                            {
+                                                @(e.Repeat ? $"every {e.IntervalSeconds ?? 0}s" : "no")
+                                            }
+                                        </div>
+
+                                        <div>
+                                            <strong>Due (UTC):</strong>
+                                            @if (editingId == e.Id)
+                                            {
+                                                <input type="datetime-local"
+                                                       @bind-value="editDueLocal"
+                                                       @bind-value:format="yyyy-MM-ddTHH:mm" />
+                                            }
+                                            else
+                                            {
+                                                @(e.DueUtc?.ToString("yyyy-MM-dd HH:mm:ss") ?? "-")
+                                            }
+                                        </div>
+
+                                        <div>
+                                            <strong>Next (local):</strong>
+                                            @(e.NextCheckUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")
+                                        </div>
+
+                                        <div>
+                                            <strong>Last (local):</strong>
+                                            @(e.LastCheckUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "-")
+                                        </div>
+                                    </div>
+
+                                    <div class="ae-details__section">
+                                        <div><strong>Instruction</strong></div>
+
+                                        @if (editingId == e.Id)
+                                        {
+                                            <textarea @bind="editInstruction"></textarea>
+                                        }
+                                        else
+                                        {
+                                            <pre class="ae-details__mono">@e.Instruction</pre>
+                                        }
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(e.ScratchpadJson))
+                                    {
+                                        <div class="ae-details__section">
+                                            <div><strong>State JSON</strong></div>
+                                            <pre class="ae-details__mono">@e.ScratchpadJson</pre>
+                                        </div>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+
+@code {
+    private string? editingId;
+    private string editInstruction = "";
+    private string editModelConfigId = "";
+    private bool editRepeat;
+    private int? editInterval;
+    private DateTime? editDueLocal; // local time
+    private EvalState editState;
+
+    private string? expandedId;
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private List<ScheduledEvaluation> items = new();
+    private bool loading;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (items.Count == 0) await Load();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Load();
+    }
+
+    private void ToggleDetails(ScheduledEvaluation e)
+    {
+        expandedId = expandedId == e.Id ? null : e.Id;
+    }
+
+    private void CloseDetails()
+    {
+        expandedId = null;
+    }
+
+    private static void ResetForNextRun(ScheduledEvaluation e, bool immediate = false)
+    {
+        e.State = EvalState.Pending;
+        e.LastCheckUtc = null;
+        if (e.Repeat)
+        {
+            e.NextCheckUtc = immediate
+                ? DateTimeOffset.UtcNow
+                : DateTimeOffset.UtcNow.AddSeconds(Math.Max(0, e.IntervalSeconds ?? 0));
+        }
+        else
+        {
+            e.NextCheckUtc = e.DueUtc ?? DateTimeOffset.UtcNow;
+        }
+    }
+
+    private static DateTimeOffset? LocalToUtc(DateTime? local)
+    {
+        if (local is null) return null;
+        var dt = DateTime.SpecifyKind(local.Value, DateTimeKind.Local);
+        return new DateTimeOffset(dt).ToUniversalTime();
+    }
+
+    private void BeginEdit(ScheduledEvaluation e)
+    {
+        editingId = e.Id;
+        editInstruction = e.Instruction;
+        editModelConfigId = e.ModelConfigId;
+        editRepeat = e.Repeat;
+        editInterval = e.IntervalSeconds;
+        editDueLocal = e.DueUtc?.ToLocalTime().DateTime;
+        editState = e.State;
+    }
+
+    private async Task SaveEdit()
+    {
+        var e = items.FirstOrDefault(x => x.Id == editingId);
+        if (e is null) return;
+
+        var updated = new ScheduledEvaluation
+        {
+            Id = e.Id,
+            Instruction = editInstruction ?? "",
+            ModelConfigId = string.IsNullOrWhiteSpace(editModelConfigId) ? e.ModelConfigId : editModelConfigId,
+            Repeat = editRepeat,
+            IntervalSeconds = editRepeat ? (editInterval ?? 0) : null,
+            DueUtc = !editRepeat ? LocalToUtc(editDueLocal) : null,
+            ScratchpadJson = e.ScratchpadJson,
+            ExpiresUtc = e.ExpiresUtc,
+            State = editState
+        };
+
+        ResetForNextRun(updated, immediate: false);
+
+        await Store.UpdateAsync(updated);
+
+        editingId = null;
+        await Load();
+    }
+
+    private void CancelEdit()
+    {
+        editingId = null;
+    }
+
+    private async Task Delete(string id)
+    {
+        var ok = await JS.InvokeAsync<bool>("confirm", "Delete this evaluation?");
+        if (!ok) return;
+        await Store.DeleteAsync(id);
+        await Load();
+    }
+
+    private async Task Restart(string id)
+    {
+        var e = await Store.GetAsync(id);
+        if (e is null) return;
+
+        ResetForNextRun(e, immediate: true);
+        await Store.UpdateAsync(e);
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        loading = true;
+        var list = await Store.ListAsync();
+        items = list
+            .OrderByDescending(x => x.NextCheckUtc ?? x.LastCheckUtc)
+            .ToList();
+        loading = false;
+        StateHasChanged();
+    }
+
+    private async Task Cancel(string id)
+    {
+        await Store.CancelAsync(id);
+        await Load();
+    }
+}

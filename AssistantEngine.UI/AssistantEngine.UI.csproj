@@ -18,34 +18,36 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<EmbeddedResource Include="sql\GetTableSchemas.sql" />
+		<PackageReference Include="Dapper" Version="2.1.66" />
 
-		<PackageReference Include="HtmlAgilityPack" Version="1.12.2" />
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-		<PackageReference Include="OllamaSharp" Version="5.3.6" />
-		<PackageReference Include="Microsoft.Extensions.AI" Version="9.8.0" />
-		<PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.64.0" />
+		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+		<PackageReference Include="OllamaSharp" Version="5.4.8" />
+		<PackageReference Include="Microsoft.Extensions.AI" Version="9.10.1" />
+		<PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.66.0" />
+		<PackageReference Include="OllamaSharp.ModelContextProtocol" Version="5.4.8" />
 		<PackageReference Include="PdfPig" Version="0.1.11" />
 		<PackageReference Include="Scrutor" Version="6.1.0" />
-		<PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.8" />
+		<PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />
 		<PackageReference Include="System.Data.SqlClient" Version="4.9.0" />
 		<PackageReference Include="System.Linq.Async" Version="6.0.3" />
 		<PackageReference Include="Microsoft.SemanticKernel.Connectors.SqliteVec" Version="1.53.0-preview" />
 		<!-- Mac branch abstractions kept to ensure cross-platform RCL usability -->
-		<PackageReference Include="Microsoft.AspNetCore.Components" Version="9.0.8" />
-		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Options" Version="9.0.8" />
+		<PackageReference Include="Microsoft.AspNetCore.Components" Version="9.0.10" />
+		<PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Options" Version="9.0.10" />
 	</ItemGroup>
 
 	<!-- Windows-only tooling (as in Mac branch condition) -->
 	<ItemGroup Condition="$([MSBuild]::IsOSPlatform('windows'))">
 		<PackageReference Include="Microsoft.SqlServer.DacFx.x64" Version="150.5282.3" />
-		<PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.2" />
-		<PackageReference Include="System.Management.Automation" Version="7.5.2" />
+		<PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.4" />
+		<PackageReference Include="System.Management.Automation" Version="7.5.4" />
 		<!-- RuntimeCompilation existed on Windows/Web branch; keep it Windows-only -->
-		<PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="9.0.8" />
+		<PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.RuntimeCompilation" Version="9.0.10" />
 	</ItemGroup>
 
 	<!-- Preserve Windows branch exclusion; keep folders available otherwise -->
@@ -57,10 +59,10 @@
 		<FrameworkReference Include="Microsoft.AspNetCore.App" />
 	</ItemGroup>
 	<ItemGroup>
-		<PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.11.0" />
-		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
-		<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.8" />
-		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.8" />
+		<PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.14.0" />
+		<PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+		<PackageReference Include="Microsoft.Extensions.Http" Version="9.0.10" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.10" />
 
 	</ItemGroup>
 	<ItemGroup>
@@ -86,6 +88,14 @@
 		<Folder Include="wwwroot\Data\" />
 		<Folder Include="wwwroot\img\logos\" />
 		<Folder Include="wwwroot\img\index\" />
+	</ItemGroup>
+	<ItemGroup>
+	  <Content Update="wwwroot\fonts\OpenSans-Italic.ttf">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="wwwroot\fonts\OpenSans-Regular.ttf">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
 	</ItemGroup>
 
 </Project>

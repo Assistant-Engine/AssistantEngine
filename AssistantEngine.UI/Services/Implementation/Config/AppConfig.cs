@@ -12,6 +12,8 @@ namespace AssistantEngine.UI.Services.Implementation.Config
         /// Full path to the vector store file (e.g., C:\...\App_Data\vector-store-main-7.db).
         /// </summary>
         public string VectorStoreFilePath { get; set; } = string.Empty;
+        public string AppDBFilePath { get; set; } = string.Empty;
+
 
         /// <summary>
         /// Folder where model JSONs live (descriptors, roles, etc.).

@@ -1,0 +1,195 @@
+﻿@page "/models"
+@using AssistantEngine.Factories
+@using AssistantEngine.UI.Pages.Chat
+@using AssistantEngine.UI.Services
+@inject ChatClientState ClientState;
+@using AssistantEngine.UI.Services.Implementation.Ollama
+@using AssistantEngine.UI.Services.Models
+@using OllamaSharp
+@using OllamaSharp.Models
+@inject OllamaImportService ModelService
+@inject IAppHealthService Health
+
+
+<div id="ollama-import-page" class="">
+    <div class="ollama-import-header nav-top">
+        <h4 class="ollama-import-title">Installed Models     
+            <div class="server-config-wrapper">
+                <div class="server-config-text">
+                    Assistant Server:
+                </div>
+                <ConfigDropdown @ref="configDD" OnSelect="@HandleModelAssistantSelected" />
+                </div>
+         </h4>
+      
+    </div>
+    <div class="inner-row">
+        <div class="ollama-local-content">
+  
+            <div class="ollama-inner-1">
+                @if (local_models == null || loading)
+                    {
+                    <PageSpinner1></PageSpinner1>
+                }
+                else
+                {
+                    <div class="table-wrap">
+                        <table class="models-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Quant</th>
+                                    <th>Arch</th>
+                                    <th>Parameters</th>
+                                  
+                                    <th>Modified</th>
+                                    <th>Size</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var m in local_models.OrderBy(x => x.Name))
+                                {
+                                    bool running = running_models.Exists(x => m.Name == x.Name && x.Digest == m.Digest);
+                                    <tr class="local-model-row @(running ? "running" : null)" title="@m.Digest">
+                                        <td class="model-name"><div class="model-name-div">@m.Name</div></td>
+                                        <td class="model-quant-level"><div class="model-quant-level-div">@NA(m.Details?.QuantizationLevel)</div></td>
+                                        <td class="model-familiy"><div class="model-familiy-div">@FamilyOf(m.Details?.Family, m.Details?.Families)</div></td>
+                                        <td class="model-param-size"><div class="model-param-size-div">@NA(m.Details?.ParameterSize)</div></td>
+                                        
+                                        <td class="model-modified-time"><div class="model-modified-time-div">@m.ModifiedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div></td>
+                                        <td class="model-size"><div class="model-size-div">@FormatBytes(m.Size)</div></td>
+
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<OllamaImportModel>? models;
+      private bool loading;
+      private string? _loadError;
+    private string FormatBytes(long bytes)
+    {
+        if (bytes >= 1_000_000_000)
+            return $"{bytes / 1_000_000_000.0:F2} GB";
+        if (bytes >= 1_000_000)
+            return $"{bytes / 1_000_000.0:F2} MB";
+        if (bytes >= 1_000)
+            return $"{bytes / 1_000.0:F2} KB";
+        return $"{bytes} B";
+    }
+
+    IOllamaApiClient Client => ClientState.OllamaClient;
+    private List<Model> local_models;
+    private List<RunningModel> running_models;
+    private async Task LoadModelsAsync(CancellationToken token)
+    {
+        var list = await Client.ListLocalModelsAsync(token);
+        var runningList = await Client.ListRunningModelsAsync(token);
+
+        running_models = runningList.ToList();
+        local_models = list.ToList();
+
+        // keep SelectedModel valid if the previously selected one no longer exists
+    
+    } private readonly CancellationTokenSource cts = new();
+    // NEW: public refresh you can call from parent after a download
+    public async Task RefreshAsync()
+    {
+        loading = true;
+        _loadError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
+            await LoadModelsAsync(linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _loadError = "Model list request timed out.";
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Couldn't fetch models: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var lDotNetReference = DotNetObjectReference.Create(this);
+        
+
+            var ollama = Health.Get(HealthDomain.Ollama);
+            if (ollama.Level != HealthLevel.Healthy)
+            {
+                _loadError = ollama.Error ?? "Ollama server not reachable.";
+                return;
+            }
+
+            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
+            await LoadModelsAsync(linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _loadError = "Model list request timed out.";
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Couldn't fetch models: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    private static string NA(string? v) => string.IsNullOrWhiteSpace(v) ? "—" : v;
+    private static string FamilyOf(string? family, string[]? families)
+        => !string.IsNullOrWhiteSpace(family) ? family
+           : (families is { Length: > 0 } ? string.Join(", ", families) : "—");
+ 
+
+    private void ToggleDropdown(OllamaImportModel model) =>
+        model.IsExpanded = !model.IsExpanded;
+  
+    private ConfigDropdown configDD;
+    private async Task HandleModelAssistantSelected(AssistantConfig model)
+    {
+        await RefreshAsync();
+    }
+
+ /*  
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            models = await ModelService.GetModelsAsync();
+        }
+      
+    }*/ protected override async Task OnInitializedAsync()
+    {
+        models = await ModelService.GetModelsAsync();
+    }
+}

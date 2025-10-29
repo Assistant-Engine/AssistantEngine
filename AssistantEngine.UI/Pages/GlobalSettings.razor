@@ -1,0 +1,223 @@
+﻿@using AssistantEngine.UI.Config
+@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Implementation.Config
+@inject IAppConfigStore Store
+@inject IJSRuntime JSRuntime
+
+<!-- Embedded settings panel (not a modal) -->
+<section id="advanced-settings" class="ae-settings @(isOpen ? "is-visible" : "")" role="region" aria-label="Advanced Settings">
+    <div class="ae-settings__card">
+        <div class="ae-settings__header nav-top">
+            <h3 class="ae-settings__title">Advanced Settings</h3>
+
+        </div>
+
+        <div class="ae-settings__body">
+            @if (Model is null)
+            {
+                <PageSpinner1></PageSpinner1>
+            }
+            else
+            {
+                <EditForm Model="Model" OnValidSubmit="SaveAsync">
+                    <DataAnnotationsValidator />
+
+                    <!-- Vector DB path (file) -->
+                    <div class="mb-3">
+                        <label class="form-label">Vector store file (.db)</label>
+                        <InputText class="form-control" @bind-Value="Model.VectorStoreFilePath" />
+                        <div class="ae-settings__row">
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="UseDefaultVectorDb">Use default</button>
+                            <button type="button" class="btn btn-sm btn-danger" @onclick="WipeVectorDb">Hard wipe</button>
+                        </div>
+                    </div>
+
+                    <!-- Model files folder -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                               title="Folder containing your model JSON definitions."></i>
+                            Model files folder
+                        </label>
+                        <InputText class="form-control" @bind-Value="Model.ModelFilePath" />
+                        <div class="ae-settings__row">
+                            <button type="button" class="btn btn-primary" @onclick="UseDefaultModelFolder">Use default</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                               title="Light or Dark ."></i>
+                            Toggle Theme
+                        </label>
+
+                        <button id="toggleThemeBtn" type="button" class="toggle-theme-btn btn">
+                            <span class="theme-label" data-theme-text>Light</span>
+                            <i class="fi fi-br-sun"></i>
+                        </button>
+                    </div>
+
+                    <details class="mt-3">
+                        <summary>Advanced (JSON)</summary>
+                        <textarea class="form-control mt-2" rows="8" @bind="rawJson"></textarea>
+                        <div class="ae-settings__row">
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="LoadFromJson">Load from JSON</button>
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="ExportCurrentJson">Refresh JSON</button>
+                        </div>
+                    </details>
+
+                    <div class="ae-settings__footer mt-3">
+                        <button class="btn btn-primary" type="submit">Save</button>
+                        <button class="btn btn-primary" type="button" @onclick="ReloadAsync">Reload</button>
+                        <button class="btn btn-danger" type="button" @onclick="ResetAsync">Reset to defaults</button>
+                    </div>
+                </EditForm>
+            }
+        </div>
+    </div>
+</section>
+
+
+
+@code {
+    private bool isOpen;
+    private AppConfig? Model;
+    private string? rawJson;
+    protected override void OnParametersSet()
+    {
+        Model = new AppConfig
+        {
+            VectorStoreFilePath = Store.Current.VectorStoreFilePath,
+            ModelFilePath = Store.Current.ModelFilePath,
+            AppDBFilePath = Store.Current.AppDBFilePath
+        };
+        ExportCurrentJson();
+        isOpen = true;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        isOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Model is null) return;
+
+        if (string.IsNullOrWhiteSpace(Model.VectorStoreFilePath) ||
+            string.IsNullOrWhiteSpace(Model.ModelFilePath))
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", "Please fill in all fields.", "Settings");
+            return;
+        }
+
+        // Detect critical changes BEFORE saving
+        var vecChanged = !PathHelper.Equals(Model.VectorStoreFilePath, Store.Current.VectorStoreFilePath, StringComparison.OrdinalIgnoreCase);
+        var modelChanged = !PathHelper.Equals(Model.ModelFilePath, Store.Current.ModelFilePath, StringComparison.OrdinalIgnoreCase);
+
+        await Store.SaveAsync(Model);
+        ExportCurrentJson();
+
+        await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", "Settings saved. You must restart the application to apply changes.", "Settings");
+        // if (vecChanged || modelChanged)
+        //     await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", "Restart AssistantEngine to fully apply path changes.", "Restart required");
+    }
+
+    private async Task ReloadAsync()
+    {
+        await Store.ReloadAsync();
+        Model = new AppConfig
+        {
+            VectorStoreFilePath = Store.Current.VectorStoreFilePath,
+            ModelFilePath = Store.Current.ModelFilePath,
+            AppDBFilePath = Store.Current.AppDBFilePath
+        };
+        ExportCurrentJson();
+        await InvokeAsync(StateHasChanged);
+        await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", "Reloaded from disk.", "Settings");
+    }
+
+    private async Task ResetAsync()
+    {
+        await Store.ResetToDefaultsAsync();
+        Model = new AppConfig
+        {
+            VectorStoreFilePath = Store.Current.VectorStoreFilePath,
+            ModelFilePath = Store.Current.ModelFilePath,
+            AppDBFilePath = Store.Current.AppDBFilePath
+        };
+        ExportCurrentJson();
+        await InvokeAsync(StateHasChanged);
+        await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.warning", "Defaults restored. Restart AssistantEngine to fully apply.", "Settings");
+    }
+
+    private void UseDefaultVectorDb()
+    {
+        var fileName = Path.GetFileName(Store.Current.VectorStoreFilePath);
+        var dbDir = Store.AppDataDirectory;
+        Directory.CreateDirectory(dbDir);
+        Model!.VectorStoreFilePath = Path.Combine(dbDir, fileName);
+    }
+
+    private void UseDefaultModelFolder()
+    {
+        var defaultModels = Path.Combine(Store.AppDataDirectory, "Models");
+        Directory.CreateDirectory(defaultModels);
+        Model!.ModelFilePath = defaultModels;
+    }
+
+    private async Task WipeVectorDb()
+    {
+        try
+        {
+            var db = Model!.VectorStoreFilePath;
+            if (!string.IsNullOrWhiteSpace(db) && File.Exists(db))
+            {
+                File.Delete(db);
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", "Vector DB deleted. It will be recreated when needed.", "Settings");
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", "Vector DB file not found.", "Settings");
+            }
+        }
+        catch (IOException)
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", "File is in use. Close connections or restart.", "Settings");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", ex.Message, "Settings");
+        }
+    }
+
+    private void ExportCurrentJson()
+      => rawJson = System.Text.Json.JsonSerializer.Serialize(Model,
+           new System.Text.Json.JsonSerializerOptions() { WriteIndented = true });
+
+    private async Task LoadFromJson()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(rawJson)) return;
+            var parsed = System.Text.Json.JsonSerializer.Deserialize<AppConfig>(rawJson);
+            if (parsed is not null)
+            {
+                Model = parsed;
+                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", "Loaded from JSON (not saved yet).", "Settings");
+            }
+        }
+        catch
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", "Invalid JSON.", "Settings");
+        }
+    }
+
+    private static class PathHelper
+    {
+        public static bool Equals(string a, string b, StringComparison cmp)
+          => string.Equals(System.IO.Path.GetFullPath(a ?? ""), System.IO.Path.GetFullPath(b ?? ""), cmp);
+    }
+}

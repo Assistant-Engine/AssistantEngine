@@ -384,6 +384,3 @@ FodyWeavers.xsd
 /EchoEdSite/downloads/*.zip
 /AssistantEngine.UI/wwwroot/img/logosolidcolour2.png
 /AssistantEngine.UI/wwwroot/img/logosolidcolour3.png
-/AssistantEngine.App/Platforms/Windows/AppInstallers/AssistantEngineInstaller-winX64.appinstaller
-/AssistantEngine.App/Platforms/Windows/AppInstallers/AssistantEngineInstaller-winX86.appinstaller
-/AssistantEngine.App/Platforms/Windows/Package.appxmanifest

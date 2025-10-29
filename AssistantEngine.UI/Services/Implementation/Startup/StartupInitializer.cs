@@ -1,4 +1,6 @@
-﻿using AssistantEngine.UI.Services.Models.Ingestion;
+﻿using AssistantEngine.UI.Services.AppDatabase;
+using AssistantEngine.UI.Services.Models.Ingestion;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.VectorData;
@@ -57,6 +59,29 @@ public sealed class StartupInitializer : IStartupInitializer
             var healthSvc = svc.GetRequiredService<IAppHealthService>();
             var ollama = healthSvc.Get(HealthDomain.Ollama);
 
+           /* try
+            {
+                var appCfg = svc.GetRequiredService<IAppConfigStore>();
+                var dbPath = appCfg.Current.AppDBFilePath;
+                Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+
+                var cs = new SqliteConnectionStringBuilder
+                {
+                    DataSource = dbPath,
+                    Mode = SqliteOpenMode.ReadWriteCreate,
+                    Cache = SqliteCacheMode.Shared
+                }.ToString();
+
+                await AppDbInitializer.EnsureSchemaAsync(cs);
+
+                // Optional: mark health
+                healthSvc.SetStatus(HealthDomain.Database, HealthLevel.Healthy, detail: "App DB ensured.");
+            }
+            catch (Exception ex)
+            {
+                healthSvc.SetStatus(HealthDomain.Database, HealthLevel.Unhealthy, error: ex.Message, detail: "App DB init failed.");
+                _log.LogError(ex, "[Init] App DB ensure failed");
+            }*/
             if (ollama.Level == HealthLevel.Healthy)
             {
                 try

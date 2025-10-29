@@ -1,0 +1,34 @@
+﻿@using System.ComponentModel
+<div  id="ae-sidebar-left" class="ae-sidebar">
+    <button class="@BtnClass(SidebarTab.Chats)" @onclick="() => Select(SidebarTab.Chats)" title="Chats">
+        <i class="fi fi-br-comment-alt"></i>
+    </button>
+    <button class="@BtnClass(SidebarTab.Evaluations)" @onclick="() => Select(SidebarTab.Evaluations)" title="Evaluations">
+        <i class="fi fi-br-clock"></i>
+    </button>
+    <button class="@BtnClass(SidebarTab.Models)" @onclick="() => Select(SidebarTab.Models)" title="Models">
+        <i class="fi fi-br-layers"></i>
+    </button>
+    <button class="@BtnClass(SidebarTab.Install)" @onclick="() => Select(SidebarTab.Install)" title="Install">
+        <i class="fi fi-br-search"></i>
+    </button>
+    <button class="@BtnClass(SidebarTab.Settings)" @onclick="() => Select(SidebarTab.Settings)" title="Settings">
+        <i class="fi fi-br-settings"></i>
+    </button>
+</div>
+
+@code {
+    [Parameter] public SidebarTab ActiveTab { get; set; }
+    [Parameter] public EventCallback<SidebarTab> OnTabChanged { get; set; }
+
+    string BtnClass(SidebarTab tab) => $"ae-side-btn{(ActiveTab == tab ? " is-active" : "")}";
+
+    async Task Select(SidebarTab tab)
+    {
+        if (ActiveTab != tab)
+        {
+            ActiveTab = tab;
+            await OnTabChanged.InvokeAsync(tab);
+        }
+    }
+}

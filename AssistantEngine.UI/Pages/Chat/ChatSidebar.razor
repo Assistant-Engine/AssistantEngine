@@ -15,7 +15,7 @@
     <nav class="sidebar-nav">
         
         <ChatHistoryList CurrentSession="@CurrentSession"
-  CurrentSessionChanged="@CurrentSessionChanged" />
+                         CurrentSessionChanged="@CurrentSessionChanged" OnNewChat="@OnNewChat" />
         @**<NavLink href="" Match="NavLinkMatch.All" class="nav-link">
             <i class="fas fa-home"></i><span>Chat</span>
             
@@ -38,6 +38,7 @@
     </div>
 </aside>
 @code {
+    [Parameter] public EventCallback OnNewChat { get; set; }
 	[Parameter] public EventCallback OpenSettingsModalRequested { get; set; }
     [Parameter] public ChatSession? CurrentSession { get; set; }
     [Parameter] public EventCallback<ChatSession> CurrentSessionChanged { get; set; }

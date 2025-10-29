@@ -43,7 +43,8 @@ namespace AssistantEngine.UI.Services.Models
         public ChatOptions Text2SQLModel => ModelOptions.First(m => m.Key == "Text2SQL").Options;
         public ChatOptions MiniTaskModel => ModelOptions.First(m => m.Key == "MiniTask").Options;
 
-      
+        public List<McpConnectorConfig> McpConnectors { get; set; } = new();
+
         public List<DatabaseConfiguration> Databases { get; set; } = new();
         public string ModelProvider { get; set; } = "Ollama"; //default and only currently;
         public string ModelProviderUrl { get; set; } = "http://178.196.27.11:11434"; //TOREMOVE for testing mac

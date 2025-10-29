@@ -171,6 +171,7 @@ namespace AssistantEngine.UI.Services.Implementation.Config
             var modelsDir = Path.Combine(dataDir, "Models"); // <-- was under AppContext.BaseDirectory (read-only on Mac)
             return new AppConfig
             {
+                AppDBFilePath = Path.Combine(dataDir, "assistantengine.db"),
                 VectorStoreFilePath = Path.Combine(dataDir, "vector-store-main.db"),
                 ModelFilePath = modelsDir
             };
@@ -181,7 +182,9 @@ namespace AssistantEngine.UI.Services.Implementation.Config
         {
             var d = CreateDefaults(root);
             //cfg.OllamaUrl = string.IsNullOrWhiteSpace(cfg.OllamaUrl) ? d.OllamaUrl : cfg.OllamaUrl;
+
             cfg.VectorStoreFilePath = string.IsNullOrWhiteSpace(cfg.VectorStoreFilePath) ? d.VectorStoreFilePath : cfg.VectorStoreFilePath;
+            cfg.AppDBFilePath = string.IsNullOrWhiteSpace(cfg.AppDBFilePath) ? d.AppDBFilePath : cfg.AppDBFilePath;
             cfg.ModelFilePath = string.IsNullOrWhiteSpace(cfg.ModelFilePath) ? d.ModelFilePath : cfg.ModelFilePath;
             return cfg;
         }
@@ -193,6 +196,7 @@ namespace AssistantEngine.UI.Services.Implementation.Config
             // ALWAYS root under writable data root
             cfg.VectorStoreFilePath = Root(cfg.VectorStoreFilePath);
             cfg.ModelFilePath = Root(cfg.ModelFilePath);
+            cfg.AppDBFilePath = Root(cfg.AppDBFilePath);
 
             // Ensure parents exist in writable area
             var vsDir = Path.GetDirectoryName(cfg.VectorStoreFilePath);
@@ -203,6 +207,7 @@ namespace AssistantEngine.UI.Services.Implementation.Config
             Console.WriteLine("[AIO] DefaultDataRoot=" + _opts.DefaultDataRoot);
             Console.WriteLine("[AIO] AppDataDirectory=" + AppDataDirectory);
             Console.WriteLine("[AIO] VectorStoreFilePath=" + cfg.VectorStoreFilePath);
+            Console.WriteLine("[AIO] AppDbFilePath=" + cfg.AppDBFilePath);
             Console.WriteLine("[AIO] ModelFilePath=" + cfg.ModelFilePath);
 
             EnsureVectorStoreWritable(ref cfg, root);

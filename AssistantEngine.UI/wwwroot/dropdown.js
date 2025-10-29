@@ -98,18 +98,63 @@ window.GLOBAL.toastrInterop = {
 
 
 document.addEventListener('DOMContentLoaded', () => {
+    $(document).on("click", ".ollama-download", function (e) {
+        // if the button is *inside* the <a>, do nothing, normal link works
+        if ($(this).closest("a").length > 0) return;
 
+        // otherwise find the nearest <a> upward or sideways and follow it
+        var $link = $(this).closest("div, li, tr").find("a").first();
+        if ($link.length === 0) return;
+
+
+
+    // build and dispatch a real click event on the anchor element
+    var ev = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        view: window
+    });
+
+        $link[0].dispatchEvent(ev);
+    });
     $(document).on('click', '#toggleThemeBtn', function () {
         const cur = $('html').attr('data-theme') || 'light';
         const next = (cur === 'light') ? 'dark' : 'light';
+
         $('html').attr('data-theme', next);
+
+        // toggle icon classes
         $(this).find('i').toggleClass('fi-br-moon fi-br-sun');
+
+        // flip any text that has data-theme-text (e.g. "Light" <-> "Dark")
+        $('[data-theme-text]').each(function () {
+
+            // text node swap
+            let txt = $(this).text();
+            txt = txt.replace(/light/gi, '__TMP__')
+                .replace(/Dark/gi, 'Light')
+                .replace(/__TMP__/gi, 'Dark');
+            $(this).text(txt);
+
+            // optional: also flip title attr if present
+            let tip = $(this).attr('title');
+            if (tip) {
+                tip = tip.replace(/light/gi, '__TMP__')
+                    .replace(/Dark/gi, 'Light')
+                    .replace(/__TMP__/gi, 'Dark');
+                $(this).attr('title', tip);
+            }
+        });
+
+
         localStorage.setItem('ae-theme', next);
 
         if (window.DotNet && DotNet.invokeMethodAsync) {
             DotNet.invokeMethodAsync('AssistantEngine.UI', 'OnThemeChanged', next);
         }
     });
+
+
 
     // "think" toggle
     $(document).on('click', 'think .toggle', function (e) {

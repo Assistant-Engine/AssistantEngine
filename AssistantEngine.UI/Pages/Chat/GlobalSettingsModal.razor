@@ -75,7 +75,8 @@
         Model = new AppConfig
         {
             VectorStoreFilePath = Store.Current.VectorStoreFilePath,
-            ModelFilePath = Store.Current.ModelFilePath
+            ModelFilePath = Store.Current.ModelFilePath,
+            AppDBFilePath = Store.Current.AppDBFilePath
         };
         ExportCurrentJson();
         isOpen = true;

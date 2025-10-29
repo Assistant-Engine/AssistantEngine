@@ -1,0 +1,15 @@
+<div class="page-spinner-bg"><div class="page-spinner-2 page-spinner"></div></div>
+
+ <style>
+    .page-spinner-2 {
+        width: 60px;
+        aspect-ratio: 4;
+        background: radial-gradient(circle closest-side,var(--page-spinner) 90%,#0000) 0/calc(100%/3) 100% no-repeat;
+        animation: l2 1s steps(3) infinite;
+    }
+    @@keyframes l2 {
+        to {
+            background-position: 150%
+        }
+    }
+ </style>

@@ -1,0 +1,316 @@
+﻿@page "/modelscopy"
+@using AssistantEngine.Factories
+@using AssistantEngine.UI.Pages.Chat
+@using AssistantEngine.UI.Services
+@inject ChatClientState ClientState
+@using AssistantEngine.UI.Services.Implementation.Ollama
+@using AssistantEngine.UI.Services.Models
+@using OllamaSharp
+@using OllamaSharp.Models
+@using System.Text.RegularExpressions
+@inject OllamaImportService ModelService
+@inject IAppHealthService Health
+
+
+@if (loading)
+{
+    <PageSpinner1></PageSpinner1>
+}
+else
+{
+    <div id="ollama-import-page" class="ollama-page">
+        <div class="ollama-import-header nav-top">
+            <h4 class="ollama-import-title">
+                Download Models
+
+                <div class="server-config-wrapper">
+                    <div class="server-config-text">
+                        Assistant Server:
+                    </div>
+                    <ConfigDropdown @ref="configDD" OnSelect="@HandleModelAssistantSelected" />
+                </div>
+            </h4>
+        </div>
+
+        <div class="ollama-split">
+            <!-- LEFT: searchable list -->
+            <aside class="ollama-left">
+                <div class="search-box">
+                    <input class="form-control ollama-install-search" placeholder="Search models…" @bind="search" @bind:event="oninput" />
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(_loadError))
+                {
+                <div class="error">@_loadError</div>
+                }
+                else if (models is null || models.Count == 0)
+                {
+                <p>No models available.</p>
+                }
+                else
+                {
+                <ul class="model-list-nav">
+                    @foreach (var m in FilteredModels)
+                    {
+                        var selected = ReferenceEquals(SelectedModel, m) ? "selected" : "";
+                        <li class="model-list-item @selected" @onclick="@(() => SelectModel(m))" title="@m.Description">
+                            <div class="model-name-row">
+                                <span class="model-name">@m.Name</span>
+                                @if (IsInstalled(m))
+                                {
+                                    <span class="badge installed">Installed</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(m.Description))
+                            {
+                                <div class="model-desc-trunc">@m.Description</div>
+                            }
+                        </li>
+                    }
+                </ul>
+                }
+            </aside>
+
+            <!-- RIGHT: selected model details -->
+            <section class="ollama-right">
+                @if (SelectedModel is null)
+                {
+                    <div class="placeholder">
+                        <h5>Select a model from the left</h5>
+                        <p>Use the search to quickly find a model, then click to view versions and details here.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="model-details">
+                        <header class="model-details-header">
+                            <h3 class="model-details-title">@SelectedModel.Name</h3>
+                            @if (IsInstalled(SelectedModel))
+                            {
+                                <span class="badge installed">Installed</span>
+                            }
+                            @if (IsRunning(SelectedModel))
+                            {
+                                <span class="badge running">Running</span>
+                            }
+                        </header>
+
+                        @if (!string.IsNullOrWhiteSpace(SelectedModel.Description))
+                        {
+                            <p class="model-details-desc">@SelectedModel.Description</p>
+                        }
+
+                        <div class="model-versions">
+                            <h5 class="version-text">Versions</h5>
+                            @if (SelectedModel.Dropdowns?.Any() == true)
+                            {
+                                <ul class="version-list">
+                                    @foreach (var d in SelectedModel.Dropdowns)
+                                    {
+                                        <li class="version-item">
+                                            @((MarkupString)d)
+                                            @if (VersionInstalled(d, SelectedModel))
+                                            {
+                                                <button class="btn download-btn ollama-download disabled">Installed</button>
+                                            }
+                                            else
+                                            {
+                                                <button class="btn download-btn ollama-download"><i class="fi-br-download"></i>Download</button>
+                                            }
+
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <p>No versions listed.</p>
+                            }
+                        </div>
+
+
+                    </div>
+                }
+            </section>
+        </div>
+    </div>
+}
+
+
+@code {
+    private List<OllamaImportModel>? models;
+    private OllamaImportModel? SelectedModel;
+
+    private List<Model> local_models = new();
+    private List<RunningModel> running_models = new();
+    private bool loading;
+    private string? _loadError;
+    private string search = "";
+
+    private IEnumerable<OllamaImportModel> FilteredModels =>
+        string.IsNullOrWhiteSpace(search)
+            ? (models ?? Enumerable.Empty<OllamaImportModel>())
+            : (models ?? Enumerable.Empty<OllamaImportModel>())
+                .Where(m =>
+                    (m.Name?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                    (m.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    IOllamaApiClient Client => ClientState.OllamaClient;
+
+    private async Task LoadModelsAsync(CancellationToken token)
+    {
+        var list = await Client.ListLocalModelsAsync(token);
+        var runningList = await Client.ListRunningModelsAsync(token);
+
+        running_models = runningList.ToList();
+        local_models = list.ToList();
+
+        // keep SelectedModel if still present, otherwise clear
+        if (SelectedModel is not null && !(models?.Any(x => x.Name == SelectedModel.Name) ?? false))
+            SelectedModel = null;
+    }
+    private static readonly Regex ModelTagRx =
+    new(@"([\w\-.]+:[\w\-.]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private bool VersionInstalled(string markup, OllamaImportModel? selected)
+    {
+        if (selected is null) return false;
+
+        // Local names for this family (e.g., "llama3:8b", "phi3:3.8b-q4", etc.)
+        var localNames = MatchingLocal(selected).Select(l => l.Name).ToList();
+        if (localNames.Count == 0) return false;
+
+        foreach (var ln in localNames)
+        {
+            if (string.Equals(ln, markup, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        var m = ModelTagRx.Match(markup);
+        if (m.Success)
+        {
+            var token = m.Groups[1].Value;
+            return localNames.Any(n => string.Equals(n, token, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return false;
+    }
+
+
+    private readonly CancellationTokenSource cts = new();
+
+    public async Task RefreshAsync()
+    {
+        loading = true;
+        _loadError = null;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
+            await LoadModelsAsync(linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _loadError = "Model list request timed out.";
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Couldn't fetch models: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+    private ConfigDropdown configDD;
+    private async Task HandleModelAssistantSelected(AssistantConfig model)
+    {
+        await RefreshAsync();
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        loading = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            var ollama = Health.Get(HealthDomain.Ollama);
+            if (ollama.Level != HealthLevel.Healthy)
+            {
+                _loadError = ollama.Error ?? "Ollama server not reachable.";
+                return;
+            }
+
+            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
+            await LoadModelsAsync(linked.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _loadError = "Model list request timed out.";
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Couldn't fetch models: {ex.Message}";
+        }
+        finally
+        {
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        models = await ModelService.GetModelsAsync();
+        if (models?.Count > 0)
+            SelectedModel = models[0]; // optional: auto-select first
+    }
+
+    private static string NA(string? v) => string.IsNullOrWhiteSpace(v) ? "—" : v;
+
+    private void SelectModel(OllamaImportModel m)
+    {
+        SelectedModel = m;
+        StateHasChanged();
+    }
+
+    private IEnumerable<Model> MatchingLocal(OllamaImportModel m)
+    {
+        if (local_models is null || m is null) yield break;
+
+        // Simple heuristic: match local model names that start with the downloadable name (before any colon)
+        var baseName = (m.Name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(baseName)) yield break;
+
+        foreach (var lm in local_models)
+        {
+            if (lm.Name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
+                yield return lm;
+        }
+    }
+
+    private bool IsInstalled(OllamaImportModel m) => MatchingLocal(m).Any();
+
+    private bool IsRunning(OllamaImportModel m)
+    {
+        var baseName = (m.Name ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(baseName)) return false;
+        return running_models?.Any(r => r.Name?.StartsWith(baseName, StringComparison.OrdinalIgnoreCase) == true) == true;
+    }
+
+    private string FormatBytes(long bytes)
+    {
+        if (bytes >= 1_000_000_000) return $"{bytes / 1_000_000_000.0:F2} GB";
+        if (bytes >= 1_000_000) return $"{bytes / 1_000_000.0:F2} MB";
+        if (bytes >= 1_000) return $"{bytes / 1_000.0:F2} KB";
+        return $"{bytes} B";
+    }
+    //older
+
+}

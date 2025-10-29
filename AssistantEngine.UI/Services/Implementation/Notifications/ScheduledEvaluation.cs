@@ -12,7 +12,7 @@ namespace AssistantEngine.UI.Services.Implementation.Notifications
 
     public sealed class ScheduledEvaluation
     {
-        public Guid Id { get; init; } = Guid.NewGuid();
+        public string Id { get; init; } = Guid.NewGuid().ToString();
 
         // Text instruction the model will evaluate (and possibly call tools from)
         public string Instruction { get; init; } = "";

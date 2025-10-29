@@ -7,7 +7,11 @@
 
 <ul class="chat-history-list">
     <li class="has-sub @(showSessions ? "active" : "")">
-        <a href="#" class="nav-link nav-link-t" @onclick="ToggleSessions">Chats</a>
+        <div href="#" class="nav-link nav-link-t nav-top" @onclick="ToggleSessions">Chats
+        <button class="btn-default new-chat-button" @onclick="@OnNewChat">
+            <i class="fi fi-br-plus"></i>
+        </button>
+        </div>
         <ul class="sub-menu" style="@(showSessions ? "display:block" : "display:none")">
             @foreach (var kv in sessions.Reverse())
             {
@@ -26,7 +30,8 @@
     </li>
 </ul>
 
-@code {
+@code { 
+    [Parameter] public EventCallback OnNewChat { get; set; }
     [Parameter] public ChatSession? CurrentSession { get; set; }
     [Parameter] public EventCallback<ChatSession> CurrentSessionChanged { get; set; }
     private IReadOnlyDictionary<string, string> sessions = new Dictionary<string, string>();
