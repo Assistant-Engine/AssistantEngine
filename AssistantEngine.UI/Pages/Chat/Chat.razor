@@ -197,46 +197,7 @@
                         c.AdditionalProperties["StartedAt"] = DateTime.UtcNow;
                         currentResponseMessage.Contents.Add(c);
                     }
-                    /**
-
-                    if (c.IsThinkingContent())
-                    {
-                        var rtxt = AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(c.GetThinkingTextSafe()); // strips any <think>
-                        if (!string.IsNullOrWhiteSpace(rtxt))
-                            reasoningBuf.Append(rtxt);
-
-                        // if(reasoning.)
-                        continue;
-                    }
-                    else
-                    {
-                        if (c is TextContent textCont)
-                        {
-                            if (reasoning.CloseIfOpen()) //if we close the re
-                            {
-
-                            }
-                        }
-                    }
-       
-
-                    if (c is TextContent tc)
-                    {
-                        var lastText = currentResponseMessage!.Contents.OfType<TextContent>().LastOrDefault();
-                        if (lastText is null) currentResponseMessage!.Contents.Add(new TextContent(tc.Text));  //we essentially link currentResponseMessage to tc. Text by doing this not an issue as is the same message
-                        else lastText.Text += tc.Text; //might be an issue though so should review
-                    }
-                    else
-                    {
-                        if (c.AdditionalProperties == null) {
-                            c.AdditionalProperties = new();
-
-                        }
-                        c.AdditionalProperties["FinishedAt"] = DateTime.UtcNow;
-                        currentResponseMessage!.Contents.Add(c);
-           
-                    }
-                      */
+                   
                 }
 
                 // metadata-origin reasoning (also sanitized)

@@ -1,5 +1,5 @@
 {
-  "Default": false,
+  "Default": true,
   "Name": "Remote Assistant",
   "Version": 1.0,
   "Id": "Remote Assistant",
@@ -8,67 +8,65 @@
       "Key": "Assistant",
       "Label": "Assistant Model",
       "Options": {
-        "ModelId": "qwen3-vl:30b",
-        "Temperature": 0.7,
+        "Temperature": 0.6,
         "TopP": 0.95,
-        "TopK": 10,
-        "AllowMultipleToolCalls": true
+        "TopK": 20,
+        "ModelId": "ae-chat:latest"
       }
     },
     {
       "Key": "Embedding",
       "Label": "Embedding Model",
       "Options": {
-        "ModelId": "all-minilm:latest"
+        "ModelId": "ae-embed:latest"
       }
     },
     {
       "Key": "Descriptor",
       "Label": "Descriptor Model",
       "Options": {
-        "ModelId": "mistral:latest"
+        "ModelId": "ae-describe:latest"
       }
     },
     {
       "Key": "Correction",
       "Label": "Correction Model",
       "Options": {
-        "ModelId": "qwen3-vl:30b"
+        "ModelId": "ae-chat:latest"
       }
     },
     {
       "Key": "Text2SQL",
       "Label": "Text To SQL Model",
       "Options": {
-        "ModelId": "qwen3-vl:30b"
+        "ModelId": "ae-chat:latest"
       }
     },
     {
       "Key": "MiniTask",
       "Label": "Mini Task Model",
       "Options": {
-        "ModelId": "qwen3:0.6b"
+        "ModelId": "ae-chat:0.6b"
       }
     }
   ],
-
+  "McpConnectors": [],
+  "Databases": [],
   "ModelProvider": "Ollama",
   "ModelProviderUrl": "https://ollama.assistantengine.ai",
-  "DescribeDatabaseWithModel": true,
-  "SystemPrompt": "You are a specialized assistant that answers questions using retrieved information. Format your answer in simple Markdown.",
+  "SystemPrompt": "",
   "VectorStore": "local",
-  "IngestionPaths": [
-  ],
-  "Databases": [
-  ],
+  "IngestionPaths": [],
   "EnabledFunctions": [
+    "SearchAsync",
+    "GetWeather",
+    "GetKnownDatabases",
+    "GetAllSQLSchema",
+    "ExecuteSQL",
+    "SearchDatabaseSchema",
     "SendHttpRequest",
     "SearchDatabase",
     "SearchCode",
-    "SearchAsync",
-    "GetKnownDatabases",
-    "ExecuteSQL",
-    "SearchDatabaseSchema",
     "WebSearch",
     "Search",
     "PowerShellScript",

@@ -64,6 +64,9 @@ html, body {
 .emph {
     
 }
+.more-col button span{
+    white-space:nowrap;
+}
 
 .badge-running{
     background-color:#043004;
