@@ -1,0 +1,26 @@
+﻿@page "/oauth/callback"
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageSpinner2></PageSpinner2>
+<div id="oauth-callback-text">Finishing sign-in…</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var uri = new Uri(Nav.Uri);
+        var q = QueryHelpers.ParseQuery(uri.Query);
+        var code = q.TryGetValue("code", out var c) ? c.ToString() : null;
+        var state = q.TryGetValue("state", out var s) ? s.ToString() : null;
+
+        if (!string.IsNullOrWhiteSpace(code) && !string.IsNullOrWhiteSpace(state))
+        {
+            // uses the GLOBAL.OAuth.deliver we added to your existing JS file
+            await JS.InvokeVoidAsync("GLOBAL.OAuth.deliver", code, state);
+            try { await JS.InvokeVoidAsync("eval", "setTimeout(()=>window.close(),50)"); } catch { }
+        }
+    }
+}

@@ -1,0 +1,183 @@
+﻿@namespace AssistantEngine.UI.Pages.Chat.AssistantSettings
+@inherits AssistantEngine.UI.Pages.Chat.AssistantSettings.AssistantSettingsBase
+@using AssistantEngine.UI.Services.Implementation.Database
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Data.SqlClient
+@inject IDatabaseRegistry DbRegistry;
+<section id="database-section-1">
+    <h4><i class="fi fi-br-database"></i><span class="header-text-1">Database Access</span></h4>
+    <dl>
+        @foreach (var database in AssistantConfig.Databases)
+        {
+            <div class="database-setting">
+                <dt class="name-dt">
+                    Name:
+                    <button class="btn btn-sm btn-danger mt-2" @onclick="@(() => RemoveDatabase(database))">
+                        <i class="fi-br-cross"></i>
+                    </button>
+                </dt>
+                <dd class="penalty1-op-inner">
+                    <InputText @bind-Value="database.Id" class="form-control"
+                               @oninput="(_) => editedDatabases.Add(database.Id)" />
+                </dd>
+
+                <dt>
+                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                       title="Database specific considerations injected when requesting information."></i>
+                    Database Considerations
+                </dt>
+                <dd class="tokencount-op-inner">
+                    <InputTextArea @bind-Value="database.DatabaseConsiderations" class="form-control mot2"
+                                   @oninput="(_) => editedDatabases.Add(database.Id)" />
+                </dd>
+
+                <dt>Connection String</dt>
+                <dd class="tokencount-op-inner">
+                    <InputTextArea @bind-Value="database.ConnectionString" class="form-control mot2"
+                                   @oninput="(_) => editedDatabases.Add(database.Id)" />
+                </dd>
+
+                <dt class="ext-dt">Dialect:</dt>
+                <dd class="penalty1-op-inner">
+                    <InputText @bind-Value="database.Dialect" class="form-control"
+                               @oninput="(_) => editedDatabases.Add(database.Id)" />
+                </dd>
+
+                <div class="describe-db">
+                    <dt class="ext-dt">
+                        <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                           title="Describe database prior to ingestion"></i> Describe Database:
+                    </dt>
+                    <dd class="subexplorer">
+                        <InputCheckbox @bind-Value="database.DescribeDatabaseWithModel" class="form-check-input ms-1"
+                                       @onchange="(_) => editedDatabases.Add(database.Id)" />
+                    </dd>
+                </div>
+
+                <button class="save-database-btn"
+                        @onclick="@(() => SaveDatabase(database))"
+                        style="display:@(editedDatabases.Contains(database.Id) ? "inline-block" : "none")">
+                    Save
+                </button>
+
+            </div>
+        }
+
+        <button class="btn btn-sm btn-outline-primary add-db-btn" @onclick="AddDatabase">Add Database</button>
+        @if (AssistantConfig.Databases.Any())
+        {
+            <button class="reingest-btn"
+                    @onclick="@(() => ReingestDatabases())">
+                Reingest Databases
+            </button>
+        }
+
+    </dl>
+</section>
+@code{
+
+    private readonly Dictionary<DatabaseConfiguration, DatabaseConfiguration> lastSaved = new();
+    private readonly HashSet<string> editedDatabases = new();
+
+    protected override void OnInitialized()
+    {
+        if (AssistantConfig?.Databases is null) return;
+        foreach (var db in AssistantConfig.Databases)
+            if (!lastSaved.ContainsKey(db)) lastSaved[db] = db.Clone();
+    }
+
+    private bool IsValidConnectionString(string connectionString)
+    {
+        try
+        {
+            using var conn = new SqlConnection(connectionString);
+            conn.Open();
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void SaveDatabase(DatabaseConfiguration dbConfig)
+    {
+        if (string.IsNullOrWhiteSpace(dbConfig.ConnectionString))
+        {
+            ClientState.StatusMessage($"Skipping save: {dbConfig.Id} has no connection string.");
+            return;
+        }
+
+        if (!IsValidConnectionString(dbConfig.ConnectionString))
+        {
+            ClientState.StatusMessage($"Invalid connection string for {dbConfig.Id}");
+            return;
+        }
+        editedDatabases.Remove(dbConfig.Id);
+        // detect rename: lookup by the live object key
+        if (lastSaved.TryGetValue(dbConfig, out var oldSnapshot) &&
+            oldSnapshot.Id != dbConfig.Id)
+        {
+            DbRegistry.Remove(oldSnapshot.Id);
+            ClientState.StatusMessage($"Database renamed from {oldSnapshot.Id} → {dbConfig.Id}");
+        }
+
+        bool exists = DbRegistry.Get(dbConfig.Id) is not null;
+
+        lastSaved[dbConfig] = dbConfig.Clone();
+        DbRegistry.Register(dbConfig);
+
+        ClientState.StatusMessage(
+            exists
+                ? $"Database {dbConfig.Id} updated successfully."
+                : $"Database {dbConfig.Id} registered successfully."
+        );
+    }
+
+    private void ReingestDatabase()
+    {
+
+    }
+    private async Task ReingestDatabases()
+    {
+        await ClientState.ReingestDatabases();
+    }
+
+    void AddDatabase()
+    {
+        var config = new DatabaseConfiguration
+        {
+            Id = "New Database",
+            DatabaseConsiderations = "When querying the database, take into account that..."
+        };
+        AssistantConfig.Databases.Add(config);
+    }
+
+    void RemoveDatabase(DatabaseConfiguration db)
+    {
+        // remove from model
+        AssistantConfig.Databases.Remove(db);
+
+        // remove from registry (by current Id if still valid)
+        if (!string.IsNullOrWhiteSpace(db.Id))
+        {
+            DbRegistry.Remove(db.Id);
+        }
+
+        // remove from lastSaved snapshot by object reference
+        if (lastSaved.TryGetValue(db, out var snapshot))
+        {
+            // also remove the old Id if it differs
+            if (!string.IsNullOrWhiteSpace(snapshot.Id) && snapshot.Id != db.Id)
+            {
+                DbRegistry.Remove(snapshot.Id);
+            }
+
+            lastSaved.Remove(db);
+        }
+
+        ClientState.StatusMessage($"Database {db.Id} removed.");
+    }
+
+
+}

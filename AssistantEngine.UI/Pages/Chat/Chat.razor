@@ -2,12 +2,14 @@
 @using AssistantEngine.Factories
 @using AssistantEngine.Services.Extensions
 @using AssistantEngine.Services.Implementation
+@using AssistantEngine.UI.Pages.Chat.AssistantSettings
 @using AssistantEngine.UI.Services
 @using AssistantEngine.UI.Services.Implementation.Database
 @using AssistantEngine.UI.Services.Implementation.Factories
 @using AssistantEngine.UI.Services.Implementation.Models.Chat
 @using AssistantEngine.UI.Services.Models
 @using AssistantEngine.UI.Services.Models.Chat
+@using System.Text.RegularExpressions
 @using static AssistantEngine.Services.Extensions.ChatMessageExtensions;
 
 @inject NavigationManager Nav
@@ -65,7 +67,7 @@
                 </div>
                 @if (showChatOptionsSidebar)
                 {
-                    <ChatOptionsSidebar OnStateChange="@SwitchModel" AssistantConfig="@ClientState.Config" class="order-last" />
+                    <AssistantSettingsSidebar OnStateChange="@SwitchModel" AssistantConfig="@ClientState.Config" class="order-last" />
                 }
 
             </div>
@@ -88,6 +90,7 @@
         current = tab; // parent decides what to render
         StateHasChanged();
     }
+
     private void ToggleEvaluations()
     {
 
@@ -118,29 +121,27 @@
     }
 
 
-    private async Task SwitchModel2()
-    {
 
-
-    }
-
-    // NEW: stream tokens into currentResponseMessage in real time
     private async Task GenerateAssistantResponseStreamingAsync(List<ChatMessage> filteredMessages)
     {
         currentResponseCancellation?.Dispose();
         currentResponseCancellation = new();
         isLoading = true;
 
-        // wall-clock start
         var startTime = DateTime.UtcNow;
         DateTime? firstTokenTime = null;
 
-        // prepare the in-progress assistant message (bound to ChatMessageList via InProgressMessage)
         currentResponseMessage = new ChatMessage
         {
             MessageId = Guid.NewGuid().ToString(),
-            Role = ChatRole.Assistant
+            Role = ChatRole.Assistant,
+            CreatedAt = DateTime.UtcNow,
+            AdditionalProperties = new()
+
         };
+
+
+       // var reasoning = new AssistantEngine.Services.Extensions.ChatMessageExtensions.ReasoningAccumulator(currentResponseMessage);
 
         try
         {
@@ -154,80 +155,143 @@
                 isStreaming = true;
                 updatesBuffer.Add(update);
 
-                // merge AdditionalProperties as they arrive (last-write-wins)
                 if (update?.AdditionalProperties is not null)
                     foreach (var kv in update.AdditionalProperties)
                         mergedAdditional[kv.Key] = kv.Value;
 
                 var contents = update?.Contents ?? [];
+                var reasoningBuf = new System.Text.StringBuilder(); // per-update temp
+
                 foreach (var c in contents)
                 {
-                    // mark first token time on first piece of content (text or otherwise)
-                    if (!firstTokenTime.HasValue) firstTokenTime = DateTime.UtcNow;
+                    if (!firstTokenTime.HasValue) {
+                        firstTokenTime = DateTime.UtcNow;
+                        currentResponseMessage.AdditionalProperties["StartedThinkingAt"] = DateTime.UtcNow;
+                    }
+
+                    var last = currentResponseMessage.Contents.LastOrDefault();
+                    if (c is TextReasoningContent reasoningCont && last is TextReasoningContent lastContent)
+                    {
+
+                        lastContent.Text += reasoningCont.Text;
+                        MergeProps(lastContent, reasoningCont);     
+                    }
+                    else if (c is TextContent textCont && last is TextContent lastCont)
+                    {
+                        if (!currentResponseMessage.AdditionalProperties.ContainsKey("FinishedThinkingAt"))
+                        {
+                            currentResponseMessage.AdditionalProperties["FinishedThinkingAt"] = DateTime.UtcNow;
+                        }
+                        lastCont.Text += textCont.Text;
+                        MergeProps(lastCont, textCont);
+
+                    }
+                    else
+                    {
+                        if(last?.AdditionalProperties != null)
+                        {
+                            last.AdditionalProperties["FinishedAt"] = DateTime.UtcNow;
+                        }
+
+                        c.AdditionalProperties ??= new();
+                        c.AdditionalProperties["StartedAt"] = DateTime.UtcNow;
+                        currentResponseMessage.Contents.Add(c);
+                    }
+                    /**
+
+                    if (c.IsThinkingContent())
+                    {
+                        var rtxt = AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(c.GetThinkingTextSafe()); // strips any <think>
+                        if (!string.IsNullOrWhiteSpace(rtxt))
+                            reasoningBuf.Append(rtxt);
+
+                        // if(reasoning.)
+                        continue;
+                    }
+                    else
+                    {
+                        if (c is TextContent textCont)
+                        {
+                            if (reasoning.CloseIfOpen()) //if we close the re
+                            {
+
+                            }
+                        }
+                    }
+       
 
                     if (c is TextContent tc)
                     {
                         var lastText = currentResponseMessage!.Contents.OfType<TextContent>().LastOrDefault();
-                        if (lastText is null) currentResponseMessage!.Contents.Add(new TextContent(tc.Text));
-                        else lastText.Text += tc.Text;
+                        if (lastText is null) currentResponseMessage!.Contents.Add(new TextContent(tc.Text));  //we essentially link currentResponseMessage to tc. Text by doing this not an issue as is the same message
+                        else lastText.Text += tc.Text; //might be an issue though so should review
                     }
                     else
                     {
-                        currentResponseMessage!.Contents.Add(c);
-                        if (c.GetType().Name.Contains("ToolCall", StringComparison.OrdinalIgnoreCase))
-                            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", "Running tool…", "Tools");
-                        if (c.GetType().Name.Contains("ToolResult", StringComparison.OrdinalIgnoreCase))
-                            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", "Tool finished.", "Tools");
-                    }
+                        if (c.AdditionalProperties == null) {
+                            c.AdditionalProperties = new();
 
-                    ChatMessageItem.NotifyChanged(currentResponseMessage!);
+                        }
+                        c.AdditionalProperties["FinishedAt"] = DateTime.UtcNow;
+                        currentResponseMessage!.Contents.Add(c);
+           
+                    }
+                      */
                 }
 
+                // metadata-origin reasoning (also sanitized)
+                if (update?.AdditionalProperties is not null)
+                {
+                    if (update.AdditionalProperties.TryGetValue("thoughts", out var th) && th is not null)
+                        reasoningBuf.Append(AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(th.ToString()));
+
+                    if (update.AdditionalProperties.TryGetValue("reasoning", out var rz) && rz is not null)
+                        reasoningBuf.Append(AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(rz.ToString()));
+
+                    if (update.AdditionalProperties.TryGetValue("metadata", out var mdObj)
+                        && mdObj is IDictionary<string, object> md
+                        && md.TryGetValue("thoughts", out var mdThoughts) && mdThoughts is not null)
+                        reasoningBuf.Append(AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(mdThoughts.ToString()));
+                }
+
+                if (reasoningBuf.Length > 0)
+                {
+                 //   reasoning.AppendSanitized(reasoningBuf.ToString());
+                }
+
+                ChatMessageItem.NotifyChanged(currentResponseMessage!);
                 await InvokeAsync(StateHasChanged);
             }
-
-            // build ChatResponse from updates
+        
             async IAsyncEnumerable<ChatResponseUpdate> Replay()
             {
                 foreach (var u in updatesBuffer) yield return u;
             }
             chatResponse = await Replay().ToChatResponseAsync(currentResponseCancellation.Token);
 
-            // --- ensure AdditionalProperties contains required durations as per your definitions ---
             chatResponse.AdditionalProperties ??= new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
-
-            // merge what we collected during streaming
             foreach (var kv in mergedAdditional)
                 chatResponse.AdditionalProperties[kv.Key] = kv.Value;
 
             var finishTime = DateTime.UtcNow;
             var totalAll = finishTime - startTime;
 
-            // total_duration_all: whole wall time
             if (!chatResponse.AdditionalProperties.ContainsKey("total_duration_all"))
                 chatResponse.AdditionalProperties["total_duration_all"] = totalAll;
 
-            // load_duration: start -> first token (or totalAll if no tokens ever arrived)
             var loadDuration = firstTokenTime.HasValue ? (firstTokenTime.Value - startTime) : totalAll;
             if (!chatResponse.AdditionalProperties.ContainsKey("load_duration"))
                 chatResponse.AdditionalProperties["load_duration"] = loadDuration;
 
-            // eval_duration: first token -> finish (zero if no tokens)
             var evalDuration = firstTokenTime.HasValue ? (finishTime - firstTokenTime.Value) : TimeSpan.Zero;
             if (!chatResponse.AdditionalProperties.ContainsKey("eval_duration"))
                 chatResponse.AdditionalProperties["eval_duration"] = evalDuration;
 
-            // total_duration (model time): if missing, use eval_duration
             if (!chatResponse.AdditionalProperties.ContainsKey("total_duration"))
                 chatResponse.AdditionalProperties["total_duration"] = evalDuration;
 
-            // tool_duration: keep your existing approach (total_all - total_duration), never negative
             if (!chatResponse.AdditionalProperties.ContainsKey("tool_duration"))
-            {
-                var toolDuration = TimeSpan.Zero;
-                chatResponse.AdditionalProperties["tool_duration"] = toolDuration;
-            }
-            // --- end ensure durations ---
+                chatResponse.AdditionalProperties["tool_duration"] = TimeSpan.Zero;
 
             messages.Add(currentResponseMessage!);
             chatSession.Messages = messages;
@@ -250,6 +314,12 @@
             isLoading = false;
             await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", ex.Message, "Streaming");
         }
+    }
+    static void MergeProps(AIContent target, AIContent src)
+    {
+        if (src.AdditionalProperties is null) return;
+        target.AdditionalProperties ??= new();
+        foreach (var kv in src.AdditionalProperties) target.AdditionalProperties[kv.Key] = kv.Value;
     }
 
 
@@ -504,7 +574,10 @@
 
     }
 
-
+    private Task SwitchModel2()
+    {
+        return Task.CompletedTask;
+    }
 
     private Task SwitchModel(OllamaSharp.Models.Model model)
     {

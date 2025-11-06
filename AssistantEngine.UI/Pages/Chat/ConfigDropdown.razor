@@ -13,7 +13,7 @@
     @if (ConfigStore.GetAll()?.Any() ?? false)
     {
         <div id="configToggle" class="config-selector model-selector" @onclick="ToggleDropdown">
-            <span class="config-dd-selected">@SelectedName</span>
+            <span class="config-dd-selected">@((CurrentState.Config?.Name) ?? CurrentState.Config?.Id ?? "(no selection)")</span>
             <span class="arrow">
                 @if (dropdownOpen)
                 {
@@ -27,14 +27,12 @@
             </span>
 
 
-
             <div id="configDropdown" class="dropdown-container config-dropdown @(dropdownOpen ? "show" : "hidden")">
                 @foreach (var cfg in ConfigStore.GetAll())
                 {
-                    <div class="config-dropdown-item@(cfg.Id == SelectedId ? " selected" : "")"
+                    <div class="config-dropdown-item@(cfg.Id == CurrentState.Config?.Id ? " selected" : "")"
                          @onclick="() => SwitchModel(cfg)">
-                        <span class="config-name">@cfg.Name</span>
-                        <span class="config-id">(@cfg.Id)</span>
+                        <span class="config-name">@(!string.IsNullOrWhiteSpace(cfg.Name) ? cfg.Name : cfg.Id)</span>
                     </div>
                 }
             </div>
@@ -44,17 +42,13 @@
 
 
 @code {
-    private string dropdownId => "configToggle"; // Generate a unique ID based on model
+    //private readonly string dropdownId = $"configToggle-{Guid.NewGuid():N}";
+     private string dropdownId => "configToggle"; // Generate a unique ID based on model
     [Parameter] public EventCallback<AssistantConfig> OnSelect { get; set; }
 
     private bool dropdownOpen;
-    private string SelectedId;
-
-    private string SelectedName =>
-        string.IsNullOrEmpty(SelectedId)
-            ? CurrentState.Config.Name
-            : ConfigStore.GetAll().First(c => c.Id == SelectedId).Name;
-
+   
+    private string SelectedName => CurrentState.Config?.Name ?? "(no selection)";// : ConfigStore.GetAll().First(c => c.Id == SelectedId).Name
     private async Task ToggleDropdown()
     {
         dropdownOpen = !dropdownOpen;
@@ -73,13 +67,12 @@
     private void SelectConfig(AssistantConfig cfg)
     {
         dropdownOpen = false;
-        SelectedId = cfg.Id;
+     
 
     }
     private async Task SwitchModel(AssistantConfig cfg)
     {
         // dropdownOpen = false;
-        SelectedId = cfg.Id;
         await CurrentState.ChangeModelAsync(cfg.Id);
         await OnSelect.InvokeAsync(cfg);
         await InvokeAsync(StateHasChanged);
@@ -92,7 +85,6 @@
         if (!firstRender) return;
         try
         {
-
             try
             {
                 var lDotNetReference = DotNetObjectReference.Create(this);

@@ -1,0 +1,37 @@
+﻿@inherits AssistantSettingsBase
+<section class="model-server-section">
+    <h4>
+        <i class="fi fi-br-network"></i>
+        <span class="header-text-1">Model Server</span>
+    </h4>
+    <dl>
+        <dt>Provider</dt>
+        <dd class="tokencount-op-inner">
+            <InputSelect @bind-Value="AssistantConfig.ModelProvider" class="form-control mot2">
+                <option value="Ollama">Ollama</option>
+            </InputSelect>
+        </dd>
+
+        <dt>
+            <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+               title="Base URL of your ollama server. If you have installed locally it is likely: http://localhost:11434"></i>
+            Server URL
+        </dt>
+        <dd class="tokencount-op-inner">
+            <InputText @bind-Value="AssistantConfig.ModelProviderUrl"
+                       class="form-control mot2"
+                       placeholder="http://localhost:11434"
+                       @onblur="EnsureProviderUrl" />
+        </dd>
+    </dl>
+</section>
+@code {
+    private void EnsureProviderUrl()
+    {
+        if (string.IsNullOrWhiteSpace(AssistantConfig.ModelProviderUrl))
+            AssistantConfig.ModelProviderUrl = "http://localhost:11434";
+    }
+
+
+
+}

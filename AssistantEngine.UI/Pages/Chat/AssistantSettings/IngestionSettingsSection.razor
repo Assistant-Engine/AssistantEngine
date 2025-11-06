@@ -1,0 +1,84 @@
+﻿@namespace AssistantEngine.UI.Pages.Chat.AssistantSettings
+@inherits AssistantEngine.UI.Pages.Chat.AssistantSettings.AssistantSettingsBase
+@using AssistantEngine.UI.Services.Models
+@using Microsoft.AspNetCore.Components.Forms
+<section id="ingestion-settings">
+    <h4><i class="fi fi-br-folder-open"></i><span class="header-text-1">RAG / Data Ingestion</span></h4>
+    <dl>
+        @foreach (var folder in AssistantConfig.IngestionPaths)
+        {
+            <div class="ingestion-folder">
+                <dt class="path-dt">Path: <button class="btn btn-sm btn-danger mt-2" @onclick="@(() => RemoveFolder(folder))"><i class="fi-br-cross"></i></button></dt>
+                <dd class="penalty1-op-inner">
+                    <InputText @bind-Value="folder.Path" class="form-control" />
+                </dd>
+
+
+
+
+                <dt class="ext-dt">File Extensions:</dt>
+                <dd class="penalty1-op-inner">
+                    <input type="text"
+                           class="form-control"
+                           placeholder="All supported types"
+                           value="@GetExtensionsString(folder)"
+                           @onchange="@((ChangeEventArgs e) => SetExtensions(folder, e.Value?.ToString()))" />
+
+                </dd>
+                <div class="explore-sub-cont">
+                    <dt class="explore-dt">Explore Subfolders:</dt>
+                    <dd class="subexplorer">
+                        <InputCheckbox @bind-Value="folder.ExploreSubFolders" class="form-check-input ms-1" />
+                    </dd>
+                </div>
+
+
+            </div>
+        }
+
+        <button class="btn btn-sm btn-outline-primary add-ingest-btn" @onclick="AddFolder">Add Ingestion Path</button>
+
+        @if (AssistantConfig.IngestionPaths.Any())
+        {
+            <button class="reingest-btn"
+                    @onclick="@(() => ReingestDocuments())">
+                Reingest
+            </button>
+        }
+    </dl>
+</section>
+@code{
+    private void AddFolder()
+    {
+        AssistantConfig.IngestionPaths ??= new();
+        AssistantConfig.IngestionPaths.Add(new IngestionSourceFolder());
+    }
+    private async Task ReingestDocuments()
+    {
+        ClientState.StatusMessage($"Starting Reingestion. Save model file to persist knowledge upon reload.");
+        await ClientState.ReingestDocuments();
+    }
+    private void RemoveFolder(IngestionSourceFolder folder)
+    {
+        AssistantConfig.IngestionPaths.Remove(folder);
+    }
+    private string GetExtensionsString(IngestionSourceFolder folder)
+    {
+        return folder.FileExtensions == null ? "" : string.Join(",", folder.FileExtensions);
+    }
+
+    private void SetExtensions(IngestionSourceFolder folder, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            folder.FileExtensions = null;
+        }
+        else
+        {
+            folder.FileExtensions = value.Split(',')
+                .Select(e => e.Trim())
+                .Where(e => !string.IsNullOrWhiteSpace(e))
+                .ToList();
+        }
+    }
+}

@@ -1,0 +1,125 @@
+﻿@using System.Linq.Expressions
+@inject IJSRuntime JS
+
+<div class="ae-dd @Class @(IsOpen ? "open" : "") @(Disabled ? "disabled" : "")" id="@_id">
+   
+    <button type="button" class="ae-dd__button" @onclick="Toggle" disabled="@(Disabled)">
+        @if (Selected?.ImageUrl is not null && ShowImages)
+        {
+            <img class="ae-dd__img" src="@Selected.ImageUrl" alt="" />
+        }
+        <span class="ae-dd__label">@((Selected?.Label) ?? Placeholder ?? "Select…")</span>
+        <i class="fi fi-br-angle-up" b-98254xbauh=""></i>
+    </button>
+
+    <div class="ae-dd__menu" role="listbox">
+        <!-- inside .ae-dd__menu, put this ABOVE the items list -->
+        @if (ShowSearch)
+        {
+            <div class="ae-dd__search" @onclick:stopPropagation @onkeydown:stopPropagation>
+                <i class="fi fi-br-search"></i>
+                <input type="text"
+                       class="ae-dd__search-input"
+                       placeholder="@SearchPlaceholder"
+                       @bind="_query"
+                       @bind:event="oninput" />
+            </div>
+        }
+
+        @if (Items is not null)
+        {
+            @foreach (var item in FilteredItems)
+            {
+                var active = Value == item.Key;
+                <button type="button"
+                        class="ae-dd__item @(active ? "active" : "") @(item.Disabled ? "disabled" : "")"
+                        role="option"
+                        disabled="@(item.Disabled)"
+                        @onclick="() => Select(item)">
+                    @if (item.ImageUrl is not null && ShowImages)
+                    {
+                        <img class="ae-dd__img" src="@item.ImageUrl" alt="" />
+                    }
+                    <span>@item.Label</span>
+                </button>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public IEnumerable<DropOption> Items { get; set; } = Array.Empty<DropOption>();
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public Expression<Func<string?>>? ValueExpression { get; set; } // enables edit context / validation
+    [Parameter] public EventCallback<string?> OnChange { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public bool ShowImages { get; set; } = true;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool ShowSearch { get; set; } = false;
+    [Parameter] public string? SearchPlaceholder { get; set; } = "Search…";
+
+    private string _query = "";
+
+    private IEnumerable<DropOption> FilteredItems =>
+        string.IsNullOrWhiteSpace(_query)
+            ? Items
+            : Items.Where(i => i.Label?.Contains(_query, StringComparison.OrdinalIgnoreCase) == true);
+
+    private bool IsOpen { get; set; }
+    private string _id = $"ae-dd-{Guid.NewGuid():N}";
+    private DotNetObjectReference<StandardDropdown>? _selfRef;
+
+    private DropOption? Selected => Items?.FirstOrDefault(x => x.Key == Value);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("aeDropdown.register", _id, _selfRef);
+        }
+    }
+
+    private void Toggle()
+    {
+        IsOpen = !IsOpen;
+        if (!IsOpen) _query = "";
+    }
+
+    [JSInvokable]
+    public void Close()
+    {
+        IsOpen = false;
+        _query = "";
+        StateHasChanged();
+    }
+
+    private async Task Select(DropOption item)
+    {
+        if (item.Disabled) return;
+        Value = item.Key;
+        await ValueChanged.InvokeAsync(Value);
+        if (OnChange.HasDelegate) await OnChange.InvokeAsync(Value);
+        IsOpen = false;
+        StateHasChanged();
+    }
+
+
+    public void Dispose()
+    {
+        _ = JS.InvokeVoidAsync("aeDropdown.unregister", _id);
+        _selfRef?.Dispose();
+    }
+
+    public sealed class DropOption
+    {
+        public string Key { get; set; } = "";
+        public string Label { get; set; } = "";
+        public string? ImageUrl { get; set; }
+        public bool Disabled { get; set; }
+    }
+}
+
+

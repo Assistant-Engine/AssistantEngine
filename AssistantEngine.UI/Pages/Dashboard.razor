@@ -2,6 +2,7 @@
 @inject IJSRuntime JSRuntime
 @inject IAppHealthService Health
 @inject ChatClientState State
+@inject IModelCache ModelCache
 @using System.ComponentModel
 @using AssistantEngine.Factories
 @using AssistantEngine.UI.Services
@@ -28,6 +29,7 @@
             <AssistantEngine.UI.Pages.GlobalSettings> </AssistantEngine.UI.Pages.GlobalSettings>
             break;
     }
+    <ModalPopup />
 </div>
 
 @code {
@@ -72,6 +74,7 @@
 
 
             await JSRuntime.InvokeVoidAsync("GLOBAL.SetOllamaRef", _ref);
+            await ModelCache.EnsureStartedAsync();
         }
     }
     // add once in the component/class

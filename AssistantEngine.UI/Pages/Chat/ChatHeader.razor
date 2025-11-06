@@ -1,7 +1,8 @@
 @using AssistantEngine.Factories
+@using AssistantEngine.UI.Services
 @using AssistantEngine.UI.Services.Models
 @inject ChatClientState ClientState;
-
+@inject IModelCache ModelCache
 <div class="chat-header-container nav-top">
 
 
@@ -83,7 +84,7 @@
         await OnStateChange.InvokeAsync();
     }
 
-    public Task RefreshModelsAsync() => modelDD?.RefreshAsync() ?? Task.CompletedTask;
+    public Task RefreshModelsAsync() => ModelCache?.RefreshNowAsync() ?? Task.CompletedTask;
 
     private async Task HandleModelAssistantSelected(AssistantConfig model)
     {

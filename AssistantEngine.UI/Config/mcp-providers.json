@@ -1,0 +1,831 @@
+[
+  {
+    "key": "custom",
+    "name": "Custom",
+    "category": "Manual",
+    "url": "",
+    "authentication": "Manual",
+    "maintainer": "",
+    "logo": "img/logos/mcp/custom.png"
+  },
+  {
+    "key": "asana",
+    "name": "Asana",
+    "category": "Project Management",
+    "url": "https://mcp.asana.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Asana",
+    "logo": "img/logos/mcp/asana.png"
+  },
+  {
+    "key": "audioscrape",
+    "name": "Audioscrape",
+    "category": "RAG-as-a-Service",
+    "url": "https://mcp.audioscrape.com",
+    "authentication": "OAuth2.1",
+    "maintainer": "Audioscrape",
+    "logo": "img/logos/mcp/audioscrape.png"
+  },
+  {
+    "key": "atlassian",
+    "name": "Atlassian",
+    "category": "Software Development",
+    "url": "https://mcp.atlassian.com/v1/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Atlassian",
+    "logo": "img/logos/mcp/atlassian.png"
+  },
+  {
+    "key": "box",
+    "name": "Box",
+    "category": "Document Management",
+    "url": "https://mcp.box.com",
+    "authentication": "OAuth2.1",
+    "maintainer": "Box",
+    "logo": "img/logos/mcp/box.png"
+  },
+  {
+    "key": "canva",
+    "name": "Canva",
+    "category": "Design",
+    "url": "https://mcp.canva.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Canva",
+    "logo": "img/logos/mcp/canva.png"
+  },
+  {
+    "key": "carbon-voice",
+    "name": "Carbon Voice",
+    "category": "Productivity",
+    "url": "https://mcp.carbonvoice.app",
+    "authentication": "OAuth2.1",
+    "maintainer": "Carbon Voice",
+    "logo": "img/logos/mcp/carbon.png"
+  },
+  {
+    "key": "close-crm",
+    "name": "Close CRM",
+    "category": "CRM",
+    "url": "https://mcp.close.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Close",
+    "logo": "img/logos/mcp/close.png"
+  },
+  {
+    "key": "cloudflare-workers",
+    "name": "Cloudflare Workers",
+    "category": "Software Development",
+    "url": "https://bindings.mcp.cloudflare.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Cloudflare",
+    "logo": "img/logos/mcp/cloudflare.png"
+  },
+  {
+    "key": "cloudflare-observability",
+    "name": "Cloudflare Observability",
+    "category": "Observability",
+    "url": "https://observability.mcp.cloudflare.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Cloudflare",
+    "logo": "img/logos/mcp/cloudflare_2.png"
+  },
+  {
+    "key": "cloudinary",
+    "name": "Cloudinary",
+    "category": "Asset Management",
+    "url": "https://asset-management.mcp.cloudinary.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Cloudinary",
+    "logo": "img/logos/mcp/cloudinary.png"
+  },
+  {
+    "key": "cortex",
+    "name": "Cortex",
+    "category": "Internal Developer Portal",
+    "url": "https://mcp.cortex.io/mcp",
+    "authentication": "API Key",
+    "maintainer": "Cortex",
+    "logo": ""
+  },
+  {
+    "key": "dialer",
+    "name": "Dialer",
+    "category": "Outbound Phone Calls",
+    "url": "https://getdialer.app/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Dialer",
+    "logo": "img/logos/mcp/dialer.png"
+  },
+  {
+    "key": "firefly",
+    "name": "Firefly",
+    "category": "Productivity",
+    "url": "https://api.fireflies.ai/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Firefly",
+    "logo": "img/logos/mcp/firefly.png"
+  },
+  {
+    "key": "find-a-domain",
+    "name": "Find-A-Domain",
+    "category": "Productivity",
+    "url": "https://api.findadomain.dev/mcp",
+    "authentication": "Open",
+    "maintainer": "Find-A-Domain",
+    "logo": "img/logos/mcp/find-a-domain.png"
+  },
+  {
+    "key": "github",
+    "name": "GitHub",
+    "category": "Software Development",
+    "url": "https://api.githubcopilot.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "GitHub",
+    "logo": "img/logos/mcp/github.jpg"
+  },
+  {
+    "key": "globalping",
+    "name": "Globalping",
+    "category": "Software Development",
+    "url": "https://mcp.globalping.dev/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Globalping",
+    "logo": "img/logos/mcp/globalping.png"
+  },
+  {
+    "key": "grafbase",
+    "name": "Grafbase",
+    "category": "Software Development",
+    "url": "https://api.grafbase.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Grafbase",
+    "logo": "img/logos/mcp/grafbase.png"
+  },
+
+  {
+    "key": "instant",
+    "name": "Instant",
+    "category": "Software Development",
+    "url": "https://mcp.instantdb.com/mcp",
+    "authentication": "OAuth",
+    "maintainer": "Instant",
+    "logo": "img/logos/mcp/instant.png"
+  },
+  {
+    "key": "intercom",
+    "name": "Intercom",
+    "category": "Customer Support",
+    "url": "https://mcp.intercom.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Intercom",
+    "logo": "img/logos/mcp/intercom.png"
+  },
+  {
+    "key": "indeed",
+    "name": "Indeed",
+    "category": "Job Board",
+    "url": "https://mcp.indeed.com/claude/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Indeed",
+    "logo": "img/logos/mcp/indeed.png"
+  },
+  {
+    "key": "invidio",
+    "name": "Invidio",
+    "category": "Video Platform",
+    "url": "https://mcp.invideo.io/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Invidio",
+    "logo": "img/logos/mcp/invidio.png"
+  },
+  {
+    "key": "jam",
+    "name": "Jam",
+    "category": "Software Development",
+    "url": "https://mcp.jam.dev/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Jam.dev",
+    "logo": "img/logos/mcp/jam.dev.png"
+  },
+  {
+    "key": "kollektiv",
+    "name": "Kollektiv",
+    "category": "Documentation",
+    "url": "https://mcp.thekollektiv.ai/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Kollektiv",
+    "logo": "img/logos/mcp/kollektiv.jpg"
+  },
+  {
+    "key": "linear",
+    "name": "Linear",
+    "category": "Project Management",
+    "url": "https://mcp.linear.app/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Linear",
+    "logo": "img/logos/mcp/linear.png"
+  },
+  {
+    "key": "listenetic",
+    "name": "Listenetic",
+    "category": "Productivity",
+    "url": "https://mcp.listenetic.com/v1/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Listenetic",
+    "logo": "img/logos/mcp/listenetic.png"
+  },
+  {
+    "key": "meta-ads-pipeboard",
+    "name": "Meta Ads by Pipeboard",
+    "category": "Advertising",
+    "url": "https://mcp.pipeboard.co/meta-ads-mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Pipeboard",
+    "logo": "img/logos/mcp/pipeboard.png"
+  },
+  {
+    "key": "morningstar",
+    "name": "MorningStar",
+    "category": "Data Analysis",
+    "url": "https://mcp.morningstar.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "MorningStar",
+    "logo": ""
+  },
+  {
+    "key": "monday-com",
+    "name": "monday.com",
+    "category": "Productivity",
+    "url": "https://mcp.monday.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "monday MCP",
+    "logo": "img/logos/mcp/monday.jpg"
+  },
+  {
+    "key": "neon",
+    "name": "Neon",
+    "category": "Software Development",
+    "url": "https://mcp.neon.tech/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Neon",
+    "logo": "img/logos/mcp/neon.png"
+  },
+  {
+    "key": "netlify",
+    "name": "Netlify",
+    "category": "Software Development",
+    "url": "https://netlify-mcp.netlify.app/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Netlify",
+    "logo": "img/logos/mcp/netlify.png"
+  },
+  {
+    "key": "notion",
+    "name": "Notion",
+    "category": "Project Management",
+    "url": "https://mcp.notion.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Notion",
+    "logo": "img/logos/mcp/notion.png"
+  },
+  {
+    "key": "octagon",
+    "name": "Octagon",
+    "category": "Market Intelligence",
+    "url": "https://mcp.octagonagents.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Octagon",
+    "logo": "img/logos/mcp/octagon.png"
+  },
+  {
+    "key": "onecontext",
+    "name": "OneContext",
+    "category": "RAG-as-a-Service",
+    "url": "https://rag-mcp-2.whatsmcp.workers.dev/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "OneContext",
+    "logo": "img/logos/mcp/onecontext.png"
+  },
+  {
+    "key": "paypal",
+    "name": "PayPal",
+    "category": "Payments",
+    "url": "https://mcp.paypal.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "PayPal",
+    "logo": "img/logos/mcp/paypal.png"
+  },
+  {
+    "key": "parallel-task-mcp",
+    "name": "Parallel Task MCP",
+    "category": "Web Research",
+    "url": "https://task-mcp.parallel.ai/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Parallel Web Systems",
+    "logo": ""
+  },
+  {
+    "key": "parallel-search-mcp",
+    "name": "Parallel Search MCP",
+    "category": "Web Search",
+    "url": "https://search-mcp.parallel.ai/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Parallel Web Systems",
+    "logo": ""
+  },
+  {
+    "key": "peek-com",
+    "name": "Peek.com",
+    "category": "Other",
+    "url": "https://mcp.peek.com",
+    "authentication": "Open",
+    "maintainer": "Peek.com",
+    "logo": ""
+  },
+  {
+    "key": "plaid",
+    "name": "Plaid",
+    "category": "Payments",
+    "url": "https://api.dashboard.plaid.com/mcp/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Plaid",
+    "logo": "img/logos/mcp/plaid.png"
+  },
+  {
+    "key": "prisma-postgres",
+    "name": "Prisma Postgres",
+    "category": "Database",
+    "url": "https://mcp.prisma.io/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Prisma Postgres",
+    "logo": "img/logos/mcp/prisma.png"
+  },
+  {
+    "key": "ramp",
+    "name": "Ramp",
+    "category": "Payments",
+    "url": "https://ramp-mcp-remote.ramp.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Ramp",
+    "logo": ""
+  },
+  {
+    "key": "rube",
+    "name": "Rube",
+    "category": "Other",
+    "url": "https://rube.app/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Composio",
+    "logo": ""
+  },
+  {
+    "key": "scorecard",
+    "name": "Scorecard",
+    "category": "AI Evaluation",
+    "url": "https://scorecard-mcp.dare-d5b.workers.dev/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Scorecard",
+    "logo": "img/logos/mcp/scorecard.png"
+  },
+  {
+    "key": "sentry",
+    "name": "Sentry",
+    "category": "Software Development",
+    "url": "https://mcp.sentry.dev/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Sentry",
+    "logo": "img/logos/mcp/sentry.png"
+  },
+  {
+    "key": "stripe",
+    "name": "Stripe",
+    "category": "Payments",
+    "url": "https://mcp.stripe.com/",
+    "authentication": "OAuth2.1 & API Key",
+    "maintainer": "Stripe",
+    "logo": "img/logos/mcp/stripe.png"
+  },
+  {
+    "key": "stytch",
+    "name": "Stytch",
+    "category": "Authentication",
+    "url": "http://mcp.stytch.dev/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Stytch",
+    "logo": "img/logos/mcp/stytch.png"
+  },
+  {
+    "key": "supabase",
+    "name": "Supabase",
+    "category": "Database",
+    "url": "https://mcp.supabase.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Supabase",
+    "logo": ""
+  },
+  {
+    "key": "square",
+    "name": "Square",
+    "category": "Payments",
+    "url": "https://mcp.squareup.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Square",
+    "logo": "img/logos/mcp/square.png"
+  },
+  {
+    "key": "thoughtspot",
+    "name": "ThoughtSpot",
+    "category": "Data Analytics",
+    "url": "https://agent.thoughtspot.app/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "ThoughtSpot",
+    "logo": ""
+  },
+  {
+    "key": "turkish-airlines",
+    "name": "Turkish Airlines",
+    "category": "Airlines",
+    "url": "https://mcp.turkishtechlab.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Turkish Technology",
+    "logo": "img/logos/mcp/turkish.png"
+  },
+  {
+    "key": "vercel",
+    "name": "Vercel",
+    "category": "Software Development",
+    "url": "https://mcp.vercel.com/",
+    "authentication": "OAuth2.1",
+    "maintainer": "Vercel",
+    "logo": "img/logos/mcp/vercel.png"
+  },
+  {
+    "key": "vibemarketing",
+    "name": "VibeMarketing",
+    "category": "Social Media",
+    "url": "https://vibemarketing.ninja/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "VibeMarketing",
+    "logo": ""
+  },
+  {
+    "key": "webflow",
+    "name": "Webflow",
+    "category": "CMS",
+    "url": "https://mcp.webflow.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Webflow",
+    "logo": "img/logos/mcp/webflow.png"
+  },
+  {
+    "key": "wix",
+    "name": "Wix",
+    "category": "CMS",
+    "url": "https://mcp.wix.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Wix",
+    "logo": "img/logos/mcp/wix.png"
+  },
+  {
+    "key": "simplescraper",
+    "name": "Simplescraper",
+    "category": "Web Scraping",
+    "url": "https://mcp.simplescraper.io/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Simplescraper",
+    "logo": "img/logos/mcp/simplescraper.png"
+  },
+  {
+    "key": "waystation",
+    "name": "WayStation",
+    "category": "Productivity",
+    "url": "https://waystation.ai/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "WayStation",
+    "logo": "img/logos/mcp/waystation.png"
+  },
+  {
+    "key": "zenable",
+    "name": "Zenable",
+    "category": "Security",
+    "url": "https://mcp.zenable.app/",
+    "authentication": "OAuth2.1",
+    "maintainer": "Zenable",
+    "logo": ""
+  },
+  {
+    "key": "zine",
+    "name": "Zine",
+    "category": "Memory",
+    "url": "https://www.zine.ai/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Zine",
+    "logo": ""
+  },
+  {
+    "key": "cloudflare-docs",
+    "name": "Cloudflare Docs",
+    "category": "Documentation",
+    "url": "https://docs.mcp.cloudflare.com/sse",
+    "authentication": "Open",
+    "maintainer": "Cloudflare",
+    "logo": "img/logos/mcp/cloudflare_3.png"
+  },
+  {
+    "key": "astro-docs",
+    "name": "Astro Docs",
+    "category": "Documentation",
+    "url": "https://mcp.docs.astro.build/mcp",
+    "authentication": "Open",
+    "maintainer": "Astro",
+    "logo": "img/logos/mcp/astro.png"
+  },
+  {
+    "key": "context-awesome",
+    "name": "Context Awesome",
+    "category": "Specialised Dataset",
+    "url": "https://www.context-awesome.com/api/mcp",
+    "authentication": "Open",
+    "maintainer": "Context Awesome",
+    "logo": ""
+  },
+  {
+    "key": "deepwiki",
+    "name": "DeepWiki",
+    "category": "RAG-as-a-Service",
+    "url": "https://mcp.deepwiki.com/sse",
+    "authentication": "Open",
+    "maintainer": "Devin",
+    "logo": ""
+  },
+  {
+    "key": "hugging-face",
+    "name": "Hugging Face",
+    "category": "Software Development",
+    "url": "https://hf.co/mcp",
+    "authentication": "Open",
+    "maintainer": "Hugging Face",
+    "logo": "img/logos/mcp/hugging.png"
+  },
+  {
+    "key": "semgrep",
+    "name": "Semgrep",
+    "category": "Software Development",
+    "url": "https://mcp.semgrep.ai/sse",
+    "authentication": "Open",
+    "maintainer": "Semgrep",
+    "logo": "img/logos/mcp/semgrep.png"
+  },
+  {
+    "key": "remote-mcp",
+    "name": "Remote MCP",
+    "category": "MCP Directory",
+    "url": "https://mcp.remote-mcp.com",
+    "authentication": "Open",
+    "maintainer": "Remote MCP",
+    "logo": "img/logos/mcp/remote_3.jpg"
+  },
+  {
+    "key": "openmesh",
+    "name": "OpenMesh",
+    "category": "Service Discovery",
+    "url": "https://api.openmesh.dev/mcp",
+    "authentication": "Open",
+    "maintainer": "OpenMesh",
+    "logo": "img/logos/mcp/openmesh.png"
+  },
+  {
+    "key": "openzeppelin-cairo-contracts",
+    "name": "OpenZeppelin Cairo Contracts",
+    "category": "Software Development",
+    "url": "https://mcp.openzeppelin.com/contracts/cairo/mcp",
+    "authentication": "Open",
+    "maintainer": "OpenZeppelin",
+    "logo": "img/logos/mcp/openzeppelin.png"
+  },
+  {
+    "key": "openzeppelin-solidity-contracts",
+    "name": "OpenZeppelin Solidity Contracts",
+    "category": "Software Development",
+    "url": "https://mcp.openzeppelin.com/contracts/solidity/mcp",
+    "authentication": "Open",
+    "maintainer": "OpenZeppelin",
+    "logo": "img/logos/mcp/openzeppelin_2.png"
+  },
+  {
+    "key": "openzeppelin-stellar-contracts",
+    "name": "OpenZeppelin Stellar Contracts",
+    "category": "Software Development",
+    "url": "https://mcp.openzeppelin.com/contracts/stellar/mcp",
+    "authentication": "Open",
+    "maintainer": "OpenZeppelin",
+    "logo": "img/logos/mcp/openzeppelin_3.png"
+  },
+  {
+    "key": "openzeppelin-stylus-contracts",
+    "name": "OpenZeppelin Stylus Contracts",
+    "category": "Software Development",
+    "url": "https://mcp.openzeppelin.com/contracts/stylus/mcp",
+    "authentication": "Open",
+    "maintainer": "OpenZeppelin",
+    "logo": "img/logos/mcp/openzeppelin_4.png"
+  },
+  {
+    "key": "llm-text",
+    "name": "LLM Text",
+    "category": "Data Analysis",
+    "url": "https://mcp.llmtxt.dev/sse",
+    "authentication": "Open",
+    "maintainer": "LLM Text",
+    "logo": "img/logos/mcp/llm.jpg"
+  },
+  {
+    "key": "gitmcp",
+    "name": "GitMCP",
+    "category": "Software Development",
+    "url": "https://gitmcp.io/docs",
+    "authentication": "Open",
+    "maintainer": "GitMCP",
+    "logo": "img/logos/mcp/gitmcp.png"
+  },
+  {
+    "key": "close",
+    "name": "Close",
+    "category": "CRM",
+    "url": "https://mcp.close.com/mcp",
+    "authentication": "API Key",
+    "maintainer": "Close",
+    "logo": "img/logos/mcp/close.png"
+  },
+  {
+    "key": "hubspot",
+    "name": "HubSpot",
+    "category": "CRM",
+    "url": "https://app.hubspot.com/mcp/v1/http",
+    "authentication": "API Key",
+    "maintainer": "HubSpot",
+    "logo": "img/logos/mcp/hubspot.png"
+  },
+  {
+    "key": "needle",
+    "name": "Needle",
+    "category": "RAG-as-a-service",
+    "url": "https://mcp.needle-ai.com/mcp",
+    "authentication": "API Key",
+    "maintainer": "Needle",
+    "logo": "img/logos/mcp/needle.png"
+  },
+  {
+    "key": "zapier",
+    "name": "Zapier",
+    "category": "Automation",
+    "url": "https://mcp.zapier.com/api/mcp/mcp",
+    "authentication": "API Key",
+    "maintainer": "Zapier",
+    "logo": "img/logos/mcp/zapier.png"
+  },
+  {
+    "key": "apify",
+    "name": "Apify",
+    "category": "Web Data Extraction Platform",
+    "url": "https://mcp.apify.com",
+    "authentication": "API Key",
+    "maintainer": "Apify",
+    "logo": "img/logos/mcp/apify.png"
+  },
+  {
+    "key": "dappier",
+    "name": "Dappier",
+    "category": "RAG-as-a-Service",
+    "url": "https://mcp.dappier.com/mcp",
+    "authentication": "API Key",
+    "maintainer": "Dappier",
+    "logo": "img/logos/mcp/dappier.png"
+  },
+  {
+    "key": "mercado-libre",
+    "name": "Mercado Libre",
+    "category": "E-Commerce",
+    "url": "https://mcp.mercadolibre.com/mcp",
+    "authentication": "API Key",
+    "maintainer": "Mercado Libre MCP Server",
+    "logo": "img/logos/mcp/mercado.png"
+  },
+  {
+    "key": "mercado-pago",
+    "name": "Mercado Pago",
+    "category": "Payments",
+    "url": "https://mcp.mercadopago.com/mcp",
+    "authentication": "API Key",
+    "maintainer": "Mercado Pago MCP Server",
+    "logo": "img/logos/mcp/mercado_2.png"
+  },
+  {
+    "key": "short-io",
+    "name": "Short.io",
+    "category": "Link shortener",
+    "url": "https://ai-assistant.short.io/mcp",
+    "authentication": "API Key",
+    "maintainer": "Short.io",
+    "logo": "img/logos/mcp/short.io.png"
+  },
+  {
+    "key": "telnyx",
+    "name": "Telnyx",
+    "category": "Communication",
+    "url": "https://api.telnyx.com/v2/mcp",
+    "authentication": "API Key",
+    "maintainer": "Telnyx",
+    "logo": "img/logos/mcp/telnyx.png"
+  },
+  {
+    "key": "dodo-payments",
+    "name": "Dodo Payments",
+    "category": "Payments",
+    "url": "https://mcp.dodopayments.com/sse",
+    "authentication": "API Key",
+    "maintainer": "Dodo Payments",
+    "logo": "img/logos/mcp/dodo.png"
+  },
+  {
+    "key": "polar-signals",
+    "name": "Polar Signals",
+    "category": "Software Development",
+    "url": "https://api.polarsignals.com/api/mcp/",
+    "authentication": "API Key",
+    "maintainer": "Polar Signals",
+    "logo": "img/logos/mcp/polar.png"
+  },
+  {
+    "key": "manifold",
+    "name": "Manifold",
+    "category": "Forecasting",
+    "url": "https://api.manifold.markets/v0/mcp",
+    "authentication": "Open",
+    "maintainer": "Manifold",
+    "logo": "img/logos/mcp/manifold.png"
+  },
+  {
+    "key": "javadocs",
+    "name": "Javadocs",
+    "category": "Software Development",
+    "url": "https://www.javadocs.dev/mcp",
+    "authentication": "Open",
+    "maintainer": "Javadocs.dev",
+    "logo": "img/logos/mcp/javadocs.dev.png"
+  },
+  {
+    "key": "customgpt-ai",
+    "name": "CustomGPT.ai",
+    "category": "RAG-as-a-service",
+    "url": "https://mcp.customgpt.ai",
+    "authentication": "API",
+    "maintainer": "CustomGPT.ai",
+    "logo": "img/logos/mcp/customgpt.png"
+  },
+  {
+    "key": "hive-intelligence",
+    "name": "Hive Intelligence",
+    "category": "Crypto",
+    "url": "https://hiveintelligence.xyz/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Hive Intelligence",
+    "logo": "img/logos/mcp/hive.ico"
+  },
+  {
+    "key": "buildkite",
+    "name": "Buildkite",
+    "category": "Software Development",
+    "url": "https://mcp.buildkite.com/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "Buildkite",
+    "logo": "img/logos/mcp/buildkite.svg"
+  },
+  {
+    "key": "ean-search-org",
+    "name": "EAN-Search.org",
+    "category": "Product Data",
+    "url": "https://www.ean-search.org/mcp",
+    "authentication": "OAuth2.1",
+    "maintainer": "EAN-Search.org",
+    "logo": ""
+  },
+  {
+    "key": "egnyte",
+    "name": "Egnyte",
+    "category": "Document Management",
+    "url": "https://mcp-server.egnyte.com/sse",
+    "authentication": "OAuth2.1",
+    "maintainer": "Egnyte",
+    "logo": ""
+  },
+  {
+    "key": "ferryhopper",
+    "name": "Ferryhopper",
+    "category": "Other",
+    "url": "https://mcp.ferryhopper.com/mcp",
+    "authentication": "Open",
+    "maintainer": "Ferryhopper",
+    "logo": ""
+  }
+]

@@ -1,0 +1,1002 @@
+﻿@namespace AssistantEngine.UI.Pages.Chat.AssistantSettings
+@inherits AssistantEngine.UI.Pages.Chat.AssistantSettings.AssistantSettingsBase
+@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Extensions
+@using AssistantEngine.UI.Services.Implementation.MCP
+@using AssistantEngine.UI.Services.Implementation.Tools
+@using AssistantEngine.UI.Services.Models
+@using Microsoft.AspNetCore.Components.Forms
+@using System.Security.Cryptography
+@using System.Text
+@inject ToolInfoService ToolInfo;
+@inject IMcpProviderCatalog ProviderCatalog;
+@inject IMcpRegistry McpRegistry;
+
+@using Microsoft.AspNetCore.Http
+@using System.Text.Json
+<section id="mcp-section">
+    <h4>
+        <i class="fi fi-br-network-cloud"></i>
+        <span class="header-text-1">MCP Connectors</span>
+    </h4>
+    <dl>
+        @foreach (var conn in AssistantConfig.McpConnectors)
+        {
+            <div class="mcp-connector-setting" @key="conn.Id">
+                <dt class="name-dt">
+                    Name:
+                    <button class="btn btn-sm btn-danger mt-2"
+                            @onclick="@(() => RemoveConnector(conn))">
+                        <i class="fi-br-cross"></i>
+                    </button>
+                </dt>
+                <dd class="penalty1-op-inner">
+                    <InputText @bind-Value="conn.Id"
+                               class="form-control"
+                               @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                </dd>
+
+        
+                <dt>Provider</dt>
+                <dd class="d-flex align-items-center gap-2">
+
+
+                 @if (_providersReady)
+                {
+                    <StandardDropdown
+                        ShowSearch="true"
+                        Items="@ProviderDropdownOptions"
+                        @bind-Value="conn.ProviderKey"
+                        OnChange="@(v => OnProviderChanged(conn, v!))"
+                        Placeholder="Choose provider"
+                        ShowImages="true"
+                        Class="form-select" />
+                }
+                else
+                {
+                    <span class="text-muted small loading-providers">Loading providers…</span>
+                }
+
+                </dd>
+              
+                @if (!string.IsNullOrWhiteSpace(conn.ProviderKey))//i.e. if dropdown has been set
+                {
+
+                    <dt>Server URL</dt>
+                    <dd class="tokencount-op-inner">
+                        <InputText @bind-Value="conn.ServerUrl"
+                                   class="form-control mot2"
+                                   placeholder="http://localhost:4001"
+                                   disabled="@(!string.Equals(conn.ProviderKey, "custom", StringComparison.OrdinalIgnoreCase))"
+                                   @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                    </dd>
+
+              
+                        @if (string.Equals(conn.ProviderKey, "custom", StringComparison.OrdinalIgnoreCase))
+                        {
+                              <dt>Authentication</dt>
+                    <dd>
+                      <StandardDropdown
+                        Items="@(new[] {
+                            new StandardDropdown.DropOption { Key = nameof(AuthType.None),           Label = "None" },
+                            new StandardDropdown.DropOption { Key = nameof(AuthType.BearerOrApiKey), Label = "Bearer / API Key" },
+                            new StandardDropdown.DropOption { Key = nameof(AuthType.OAuth2),         Label = "OAuth 2.0" }
+                        })"
+                        Value="@conn.Auth.ToString()"
+                        ValueChanged="@(v => {
+                            if (!string.IsNullOrEmpty(v)) conn.Auth = Enum.Parse<AuthType>(v);
+                            editedConnectors.Add(conn.Id);
+                            StateHasChanged();
+                        })"
+                        ShowImages="false"
+                        Class="form-select" />
+                      </dd>
+
+                        }
+                        else
+                        {
+                            <span class="badge bg-secondary" style="display:none;">
+                                @(conn.Auth == AuthType.OAuth2 ? "OAuth 2.0"
+                                                    : conn.Auth == AuthType.BearerOrApiKey ? "API Key" : "None")
+                            </span>
+                                    }
+              
+
+
+                    @* Preset + API Key: only Token *@
+                    @if (!string.Equals(conn.ProviderKey, "custom", StringComparison.OrdinalIgnoreCase) && conn.Auth == AuthType.BearerOrApiKey)
+                    {
+                        <dt>Token / API Key</dt>
+                        <dd>
+                            <InputText @bind-Value="conn.AuthToken"
+                                       class="form-control mot2"
+                                       placeholder="Bearer xxx | api-key"
+                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                        </dd>
+                    }
+
+                    @* Custom + Bearer/API: header + token *@
+                    @if (string.Equals(conn.ProviderKey, "custom", StringComparison.OrdinalIgnoreCase) && conn.Auth == AuthType.BearerOrApiKey)
+                    {
+                        <dt>Header Name</dt>
+                        <dd>
+                            <InputText @bind-Value="conn.ApiKeyHeaderName" class="form-control"
+                                       placeholder="Authorization or X-API-Key"
+                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                        </dd>
+
+                        <dt>Token / API Key</dt>
+                        <dd>
+                            <InputText @bind-Value="conn.AuthToken" class="form-control mot2"
+                                       placeholder="Bearer xxx | api-key"
+                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                        </dd>
+                    }
+
+                    @* Custom + OAuth2: full manual *@
+                    @if (string.Equals(conn.ProviderKey, "custom", StringComparison.OrdinalIgnoreCase) && conn.Auth == AuthType.OAuth2)
+                    {
+                        <dt>Client Id</dt>
+                        <dd><InputText @bind-Value="conn.OAuthClientId" class="form-control" /></dd>
+
+                        <dt>Auth URL</dt>
+                        <dd><InputText @bind-Value="conn.OAuthAuthUrl" class="form-control" /></dd>
+
+                        <dt>Token URL</dt>
+                        <dd><InputText @bind-Value="conn.OAuthTokenUrl" class="form-control" /></dd>
+
+                        <dt>Redirect URL</dt>
+                        <dd><InputText @bind-Value="conn.OAuthRedirectUrl" class="form-control" /></dd>
+
+                        <dt>Scopes</dt>
+                        <dd><InputText @bind-Value="conn.OAuthScopes" class="form-control" placeholder="space separated" /></dd>
+
+                        <button class="btn btn-default" @onclick="() => BeginOAuth(conn)">Connect</button>
+                        @if (!string.IsNullOrWhiteSpace(conn.OAuthAccessToken))
+                        {
+                            <span class="text-success ms-2">Connected</span>
+                            <button class="btn btn-link" @onclick="() => DisconnectOAuth(conn)">Disconnect</button>
+                        }
+                    }
+
+
+                    @if (connectorTools.TryGetValue(conn.Id, out var toolNames) && toolNames.Any())
+                    {
+                        var modeClass = IsEditing(conn) ? "mcp-editing-on" : "mcp-editing-off";
+                        <dt class="d-flex align-items-center allowed-mcp-sec">
+                            <span class="me-2">Allowed Tools</span>
+
+                            <button type="button"
+                                    class="btn btn-sm btn-link p-0 m-0 text-decoration-none allow-mcp-btn"
+                                    title="Edit allowed tools"
+                                    @onclick="@(() => ToggleConnectorEdit(conn))">
+                                <i class="fi fi-br-pencil"></i>
+                            </button>
+                        </dt>
+
+                        <dd class="penalty1-op-inner small">
+                            <div class="@($"mcp-tools-wrapper {modeClass}")">
+                                <!-- VIEW MODE (badges only) -->
+                                <div class="mcp-view-mode">
+                                    @if (conn.EnabledTools.Any())
+                                    {
+                                        @foreach (var t in conn.EnabledTools)
+                                        {
+                                            string fullName = $"MCP/{conn.Id}/{t}";
+                                            <div class="badge badge-1" @onclick="() => OpenToolModal(fullName)">@t</div>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <div class="text-muted tiny">
+                                            No tools enabled.
+                                        </div>
+                                    }
+                                </div>
+
+                                <!-- EDIT MODE (checkbox list) -->
+                                <div class="mcp-edit-mode">
+                                    <div class="mcp-tools-list">
+                                        @foreach (var t in toolNames)
+                                        {
+                                            bool enabled = conn.EnabledTools.Contains(t);
+                                            <label class="form-check mcp-tool-choice d-flex align-items-center mb-1">
+                                                <input type="checkbox"
+                                                       class="form-check-input me-2"
+                                                       checked="@enabled"
+                                                       @onchange="@((ChangeEventArgs e) => ToggleToolAllowed(conn, t, (bool)e.Value))" />
+                                                <span class="badge badge-1">@t</span>
+                                            </label>
+                                        }
+                                    </div>
+                                    <div class="text-muted tiny">
+                                        Uncheck to disable a tool for this assistant.
+                                    </div>
+                                </div>
+                            </div>
+                        </dd>
+
+                        <button class="save-connector-btn"
+                                style="display:@(editedConnectors.Contains(conn.Id) ? "inline-block" : "none")"
+                                @onclick="@(() => SaveConnector(conn))">
+                            Save Connector
+                        </button>
+                    }
+                    else
+                    {
+          @if (conn.Auth == AuthType.OAuth2)
+    { 
+     
+        var isCustom = string.Equals(conn.ProviderKey, "custom", StringComparison.OrdinalIgnoreCase);
+        var missingUrls = string.IsNullOrWhiteSpace(conn.OAuthAuthUrl) || string.IsNullOrWhiteSpace(conn.OAuthTokenUrl);
+
+        // show manual URL inputs only if:
+        // - Custom provider, or
+        // - we tried discovery and URLs are still missing, or
+        // - the user toggled "Advanced"
+        bool needManualUrls = isCustom || (_discoveryTried.Contains(conn.Id) && missingUrls) || _showAdvancedUrls.Contains(conn.Id);
+
+        // Show a tiny mode indicator (optional)
+        <div class="tiny text-muted mb-1 cient-mode">
+            Mode:
+            @(
+              conn.ClientMode == ClientMode.UserSuppliedConfidential ? "Confidential (User-supplied)" :
+              conn.ClientMode == ClientMode.PublicPkce ? "Public (PKCE)" :
+              conn.ClientMode.ToString()
+            )
+        </div>
+
+        @* USER-SUPPLIED CONFIDENTIAL: show Client ID + Client Secret *@
+        @if (conn.ClientMode == ClientMode.UserSuppliedConfidential)
+        {
+            <dt>Client ID</dt>
+            <dd>
+                <InputText @bind-Value="conn.OAuthClientId"
+                           class="form-control"
+                           placeholder="Your OAuth client_id"
+                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+            </dd>
+
+            <dt>Client Secret</dt>
+            <dd>
+                <InputText @bind-Value="conn.OAuthClientSecret"
+                           class="form-control"
+                           type="password"
+                           placeholder="Your OAuth client_secret"
+                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+            </dd>
+        }
+
+  
+
+
+
+        @* Optional scopes + redirect (kept compact) *@
+        <details class="mb-2">
+            <summary class="small">Advanced</summary>
+            <div class="mt-2">
+            
+            <dt class="auth-url-dt">Auth URL</dt>
+            <dd>
+                <InputText @bind-Value="conn.OAuthAuthUrl"
+                           class="form-control"
+                           placeholder="https://.../authorize"
+                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+            </dd>
+
+            <dt>Token URL</dt>
+            <dd>
+                <InputText @bind-Value="conn.OAuthTokenUrl"
+                           class="form-control"
+                           placeholder="https://.../token"
+                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+            </dd>
+                <dt>Scopes</dt>
+                <dd>
+                    <InputText @bind-Value="conn.OAuthScopes"
+                               class="form-control"
+                               placeholder="openid profile email (space separated)"
+                               @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                </dd>
+
+                <dt>Redirect URL</dt>
+                <dd>
+                    <InputText @bind-Value="conn.OAuthRedirectUrl"
+                               class="form-control"
+                               placeholder="(optional) e.g. http://127.0.0.1:51789/oauth/callback"
+                               @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                </dd>
+
+                @* For PublicPkce you may optionally expose Client Id here if you want it editable *@
+                @if (conn.ClientMode == ClientMode.PublicPkce)
+                {
+                    <dt>Client ID (optional)</dt>
+                    <dd>
+                        <InputText @bind-Value="conn.OAuthClientId"
+                                   class="form-control"
+                                   placeholder="Defaults to provider's default or 'assistant-engine'"
+                                   @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                    </dd>
+                }
+            </div>
+        </details>
+        @* In your OAuth UI block (e.g., within: if (conn.Auth == AuthType.OAuth2) … ) *@
+    @if (!string.IsNullOrWhiteSpace(conn.RegistrationEndpoint) && string.IsNullOrWhiteSpace(conn.OAuthClientId))
+    {
+        <div class="mb-2">
+            <button class="btn btn-sm btn-outline-secondary"
+                    @onclick="() => RegisterClientAsync(conn)">
+                <i class="fi fi-br-plus-small"></i> Register Client (DCR)
+            </button>
+            <small class="text-muted ms-2">
+                Uses dynamic client registration at the authorization server.
+            </small>
+        </div>
+    }
+
+        @* Connect / Connected state *@
+        @if (string.IsNullOrWhiteSpace(conn.OAuthAccessToken))
+        {
+            <button class="btn discover-tools-btn" @onclick="() => BeginOAuth(conn)">
+                Connect
+            </button>
+        }
+        else
+        {
+            <span class="text-success ms-2">Connected</span>
+            <button class="btn btn-link" @onclick="() => DisconnectOAuth(conn)">Disconnect</button>
+            <button class="btn discover-tools-btn" @onclick="@(() => DiscoverTools(conn))">
+                Discover Tools
+            </button>
+        }
+    }
+
+                        else
+                        {
+                            <button class="btn discover-tools-btn"
+                                    disabled="@(conn.Auth == AuthType.BearerOrApiKey && string.IsNullOrWhiteSpace(conn.AuthToken))"
+                                    title="@(conn.Auth == AuthType.BearerOrApiKey && string.IsNullOrWhiteSpace(conn.AuthToken) ? "Enter API key first" : null)"
+                                    @onclick="@(() => DiscoverTools(conn))">
+                                Connect
+                            </button>
+                        }
+
+                    }                    
+                }
+            </div>
+        }
+
+        <button class="btn btn-sm btn-outline-primary add-connector-btn"
+                @onclick="AddConnector">
+            Add Connector
+        </button>
+    </dl>
+</section>
+@code{
+    [Inject] NavigationManager Nav { get; set; } = default!;
+
+    // add near your fields
+    private readonly Dictionary<string,(string Verifier,string State)> _oauthEphemeral = new();
+    public static McpSettingsSection? Current { get; private set; }
+    private IReadOnlyList<McpProviderItem> _providers = Array.Empty<McpProviderItem>();
+    private HashSet<string> editedConnectors = new();
+    private Dictionary<string, List<string>> connectorTools = new();
+    private HashSet<string> editingConnectors = new();
+    private bool _providersReady;
+    private bool _didInitialHydrate;
+    private bool _hydrating; 
+    private readonly HashSet<string> _discoveryTried = new();
+    private readonly HashSet<string> _showAdvancedUrls = new(); // optional UI toggle
+
+
+
+protected override async Task OnInitializedAsync()
+{
+    var all = await ProviderCatalog.GetAllAsync();
+    _providers = all.Where(IsSupportedProvider).ToList();
+    _providersReady = true;
+
+    NormalizeProviderKeys();  
+    StateHasChanged();
+}
+private void NormalizeProviderKeys() 
+{
+    if (AssistantConfig?.McpConnectors is null || _providers is null) return;
+
+    foreach (var conn in AssistantConfig.McpConnectors)
+    {
+        if (string.IsNullOrWhiteSpace(conn.ProviderKey)) continue;
+
+        var match = _providers.FirstOrDefault(p =>
+            string.Equals(p.key,  conn.ProviderKey, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(p.name, conn.ProviderKey, StringComparison.OrdinalIgnoreCase));
+
+        if (match is not null)
+            conn.ProviderKey = match.key; // force exact key casing used by Items
+    }
+}
+
+protected override void OnParametersSet()
+{
+    if (_providersReady) NormalizeProviderKeys(); 
+}
+
+    void DumpAuthDebug(McpConnectorConfig conn, string prefix)
+    {
+        ClientState.StatusMessage(
+            $"{prefix} " +
+            $"issuer={conn.AuthorizationServerIssuer ?? "(null)"} | " +
+            $"auth={conn.OAuthAuthUrl ?? "(null)"} | " +
+            $"token={conn.OAuthTokenUrl ?? "(null)"} | " +
+            $"reg={conn.RegistrationEndpoint ?? "(null)"} | " +
+            $"DCR client_id={conn.OAuthClientId ?? "(null)"} | " +
+            $"has_secret={(string.IsNullOrEmpty(conn.OAuthClientSecret) ? "no" : "yes")} | " +
+            $"reg_uri={conn.RegistrationClientUri ?? "(null)"}");
+    }
+
+
+
+
+
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            if (!_didInitialHydrate)
+            {
+                _didInitialHydrate = true;
+
+                ClientState.RefreshTools();
+
+                _hydrating = true; // add
+                if (AssistantConfig?.McpConnectors != null)
+                {
+                    foreach (var conn in AssistantConfig.McpConnectors)
+                        await DiscoverTools(conn, markEdited: false); // changed
+                }
+                _hydrating = false; // add
+
+                StateHasChanged();
+            }
+            Current = this;
+            await base.OnAfterRenderAsync(firstRender);
+        }
+
+    void OpenToolModal(string id)
+    {
+        var tool = AssistantConfig.AssistantModel.Tools.FirstOrDefault(x => x.Name == id);
+        if (tool is AIFunction fn)
+        {
+            var content = ToolInfo.Build(fn);
+            Modal.Show(content, "About Tool: " + fn.Name, size: "sm", className: "tool-modal");
+        }
+    }
+
+    void OpenToolModal(AITool tool)
+    {
+        if (tool is AIFunction fn)
+        {
+            var content = ToolInfo.Build(fn);
+            Modal.Show(content, "About Tool: " + fn.Name, size: "sm", className: "tool-modal");
+        }
+    }
+    private void ToggleConnectorEdit(McpConnectorConfig conn)
+    {
+        if (!editingConnectors.Add(conn.Id))
+            editingConnectors.Remove(conn.Id);
+    }
+    private IEnumerable<StandardDropdown.DropOption> ProviderDropdownOptions
+{
+    get
+    {
+        if (_providers is null) return Array.Empty<StandardDropdown.DropOption>();
+
+        var list = _providers.ToList(); // preserve original order
+        var anyLogo = list.Any(p => !string.IsNullOrWhiteSpace(p.logo));
+
+        var ordered = anyLogo
+            ? list.OrderBy(p => string.IsNullOrWhiteSpace(p.logo) ? 1 : 0).ToList() // logos first (stable)
+            : list;
+
+        return ordered.Select(p => new StandardDropdown.DropOption
+        {
+            Key = p.key,
+            Label = p.name,
+            ImageUrl = string.IsNullOrWhiteSpace(p.logo) ? null : $"_content/AssistantEngine.UI/{p.logo}"
+        });
+    }
+}
+
+    private bool IsEditing(McpConnectorConfig conn) => editingConnectors.Contains(conn.Id);
+
+    private void MarkEdited(McpConnectorConfig c) => editedConnectors.Add(c.Id);
+
+  private async void OnProviderChanged(McpConnectorConfig conn, string? value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        return;             
+
+    conn.ProviderKey = value;
+
+    var p = _providers?
+        .FirstOrDefault(x => string.Equals(x.key, conn.ProviderKey, StringComparison.OrdinalIgnoreCase)); // changed
+
+    if (p is not null) conn.PrefillFromProvider(p);
+    editedConnectors.Add(conn.Id);
+    StateHasChanged();
+}
+
+
+
+    static readonly HashSet<string> SupportedModes = new(StringComparer.OrdinalIgnoreCase)
+{ "public_pkce", "user_supplied_confidential" };
+
+    static bool IsSupportedProvider(McpProviderItem p)
+    {
+        // null/unknown => treat as public_pkce (your default)
+        var mode = string.IsNullOrWhiteSpace(p.clientMode) ? "public_pkce" : p.clientMode;
+        return SupportedModes.Contains(mode);
+    }
+    private void AddConnector()
+    {
+        AssistantConfig.McpConnectors ??= new();
+        var cfg = new McpConnectorConfig
+        {
+            Id = "New Connector",
+            ServerUrl = "http://localhost:4001"
+        };
+        AssistantConfig.McpConnectors.Add(cfg);
+        editedConnectors.Add(cfg.Id);
+    }
+
+    private void RemoveConnector(McpConnectorConfig conn)
+    {
+        AssistantConfig.McpConnectors.Remove(conn);
+        McpRegistry.Remove(conn.Id);
+        connectorTools.Remove(conn.Id);
+        ClientState.StatusMessage($"Connector {conn.Id} removed.");
+    }
+
+    private async Task<bool> PreflightAsync(McpConnectorConfig conn)
+    {
+        try
+        {
+            using var http = new HttpClient();
+            var resp = await http.GetAsync(conn.ServerUrl);
+            if ((int)resp.StatusCode == 401 || (int)resp.StatusCode == 403)
+            {
+                var (meta, scope) = AssistantEngine.UI.Services.Extensions.WwwAuthHelper.Parse(resp);
+                if (!string.IsNullOrWhiteSpace(meta))  conn.ResourceMetadataUrl   = meta;
+                if (!string.IsNullOrWhiteSpace(scope)) conn.LastChallengedScopes  = scope;
+
+                // If scopes were challenged, prefer them next auth attempt
+                if (!string.IsNullOrWhiteSpace(scope))
+                    conn.OAuthScopes = scope;
+
+                return false; // not ready—needs auth
+            }
+            return true; // OK or other status
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+ 
+    private async Task DiscoverTools(McpConnectorConfig conn, bool markEdited = true) // changed
+    {
+        try
+        {
+            var reg = await McpRegistry.RegisterAsync(conn);
+            var toolNames = reg.Tools.Select(t => t.Name).Distinct().OrderBy(x => x).ToList();
+            connectorTools[conn.Id] = toolNames;
+
+            conn.EnabledTools ??= new List<string>();
+            if (conn.EnabledTools.Count == 0) conn.EnabledTools.AddRange(toolNames);
+
+            if (markEdited && !_hydrating) editedConnectors.Add(conn.Id); // changed
+
+            ClientState.RefreshTools();
+            //ClientState.StatusMessage($"Connected to {conn.Id}. {toolNames.Count} tools available, all enabled.");
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            ClientState.StatusMessage($"Failed to connect: {ex.Message}");
+        }
+    }
+
+
+
+
+    private void ToggleToolAllowed(McpConnectorConfig c, string toolName, bool on)
+    {
+        c.EnabledTools ??= new List<string>();
+        if (on)
+        {
+            if (!c.EnabledTools.Contains(toolName)) c.EnabledTools.Add(toolName);
+        }
+        else
+        {
+            c.EnabledTools.Remove(toolName);
+        }
+        MarkEdited(c);
+    }
+
+   private async Task SaveConnector(McpConnectorConfig conn) // changed: Task
+    {
+        editedConnectors.Remove(conn.Id);
+        ClientState.RefreshTools();
+        ClientState.StatusMessage($"Connector {conn.Id} saved.");
+
+        MarkDirty?.Invoke();                         
+        if (SaveAssistantAsync is not null)
+            await SaveAssistantAsync();            
+    }
+
+
+    private async Task RegisterClientAsync(McpConnectorConfig c)
+    {
+        if (string.IsNullOrWhiteSpace(c.RegistrationEndpoint))
+        {
+            ClientState.StatusMessage("This authorization server does not advertise dynamic registration.");
+            return;
+        }
+        var redirect = c.OAuthRedirectUrl ?? ResolveRedirect(c, Nav);
+        // Choose app type and auth method based on ClientMode
+        var isConf = c.ClientMode == ClientMode.UserSuppliedConfidential;
+        var payload = new Dictionary<string, object?>
+            {
+                ["application_type"] = isConf ? "web" : "native",
+                ["client_name"] = $"Assistant Engine ({c.Id})",
+                ["redirect_uris"] = new[] { redirect },
+                ["grant_types"] = new[] { "authorization_code", "refresh_token" },
+                ["response_types"] = new[] { "code" },
+            // prefer basic for confidential, none for public
+                ["token_endpoint_auth_method"] = isConf ? "client_secret_basic" : "none"
+            };
+
+        using var http = new HttpClient();
+        using var req = new HttpRequestMessage(HttpMethod.Post, c.RegistrationEndpoint)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+            };
+        var resp = await http.SendAsync(req);
+        var body = await resp.Content.ReadAsStringAsync();
+
+        if (!resp.IsSuccessStatusCode)
+        {
+            ClientState.StatusMessage($"Client registration failed: {(int)resp.StatusCode} {resp.ReasonPhrase} {body}");
+            return;
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+
+        c.RegisteredClientId      = root.GetProperty("client_id").GetString();
+        c.OAuthClientId           = c.RegisteredClientId;
+        c.OAuthClientSecret       = root.TryGetProperty("client_secret", out var cs) ? cs.GetString() : null;
+        c.RegistrationAccessToken = root.TryGetProperty("registration_access_token", out var rat) ? rat.GetString() : null;
+        c.RegistrationClientUri   = root.TryGetProperty("registration_client_uri", out var rcu) ? rcu.GetString() : null;
+        c.ClientIdIssuedAt        = root.TryGetProperty("client_id_issued_at", out var cia) && cia.TryGetInt64(out var x) ? x : null;
+        c.ClientSecretExpiresAt   = root.TryGetProperty("client_secret_expires_at", out var cse) && cse.TryGetInt64(out var y) ? y : null;
+
+        //ClientState.StatusMessage($"Client registered ({c.OAuthClientId}).");
+        StateHasChanged();
+    }
+
+    private static string ResolveRedirect(McpConnectorConfig c, NavigationManager Nav)
+    {
+        // Derive from current origin
+        var origin = new Uri(Nav.BaseUri).GetLeftPart(UriPartial.Authority).TrimEnd('/');
+
+        // Prefer RFC 8252 loopback HTTP; switch scheme if you want HTTPS, but be consistent.
+        // If you *must* force 127.0.0.1, normalize host:
+        var uri = new UriBuilder(origin);
+        if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+            uri.Host = "127.0.0.1";
+        // Optional: force http for native apps
+        // uri.Scheme = "http"; uri.Port = uri.Port; // keep port
+
+        var canonical = $"{uri.Uri.GetLeftPart(UriPartial.Authority)}/oauth/callback";
+
+        // If user configured a custom redirect, normalize it the same way
+        if (!string.IsNullOrWhiteSpace(c.OAuthRedirectUrl))
+        {
+            var custom = c.OAuthRedirectUrl.Trim();
+            custom = custom.Replace("://localhost", "://127.0.0.1"); // same normalization
+            return custom;
+        }
+        return canonical;
+    }
+
+    // BEGIN COPY: BeginOAuth
+    async Task BeginOAuth(McpConnectorConfig c)
+    {
+        try
+        {
+            // 1) Protected Resource discovery (RFC 9728) → issuer
+            var (resMeta, issuer) = await ProviderCatalog.DiscoverProtectedResourceAsync(c.ServerUrl);
+            if (!string.IsNullOrWhiteSpace(resMeta))  c.ResourceMetadataUrl      = resMeta;
+            if (!string.IsNullOrWhiteSpace(issuer))   c.AuthorizationServerIssuer = issuer;
+
+            // 2) Authorization Server discovery (RFC 8414 / OIDC)
+            if (string.IsNullOrWhiteSpace(c.OAuthAuthUrl) || string.IsNullOrWhiteSpace(c.OAuthTokenUrl))
+            {
+                var (auth, token, reg, scopes) = await ProviderCatalog.DiscoverAuthorizationServerAsync(
+                    c.AuthorizationServerIssuer ?? new Uri(c.ServerUrl).GetLeftPart(UriPartial.Authority));
+
+                if (!string.IsNullOrWhiteSpace(auth))  c.OAuthAuthUrl  = auth;
+                if (!string.IsNullOrWhiteSpace(token)) c.OAuthTokenUrl = token;
+                if (!string.IsNullOrWhiteSpace(reg))   c.RegistrationEndpoint = reg;
+                if (string.IsNullOrWhiteSpace(c.OAuthScopes) && scopes is { Length: > 0 })
+                    c.OAuthScopes = string.Join(' ', scopes);
+            }
+            // inside BeginOAuth(McpConnectorConfig c), after discovery has filled c.RegistrationEndpoint
+            if (!string.IsNullOrWhiteSpace(c.RegistrationEndpoint) && string.IsNullOrWhiteSpace(c.OAuthClientId))
+            {
+                ClientState.StatusMessage("No client_id found. Attempting Dynamic Client Registration…");
+                await RegisterClientAsync(c);
+
+                if (string.IsNullOrWhiteSpace(c.OAuthClientId))
+                {
+                    ClientState.StatusMessage("Dynamic Client Registration failed or not supported. Please enter Client ID (and Secret if required).");
+                    return; // bail until user fills creds
+                }
+            }
+
+            // 3) Fallback OIDC discovery (your legacy helper)
+            if (string.IsNullOrWhiteSpace(c.OAuthAuthUrl) || string.IsNullOrWhiteSpace(c.OAuthTokenUrl))
+            {
+                var discovered = await ProviderCatalog.DiscoverOidcAsync(c.ServerUrl);
+                _discoveryTried.Add(c.Id);
+                if (discovered is { } d)
+                {
+                    c.OAuthAuthUrl  = d.authUrl;
+                    c.OAuthTokenUrl = d.tokenUrl;
+                }
+            }
+            //  DumpAuthDebug(c, "DISCOVERY:");
+            if (string.IsNullOrWhiteSpace(c.OAuthAuthUrl) || string.IsNullOrWhiteSpace(c.OAuthTokenUrl))
+            {
+                ClientState.StatusMessage("OAuth discovery failed. For Custom, please fill Auth/Token URLs.");
+                return;
+            }
+
+            // Helper: canonical resource (RFC 8707)
+            static string CanonicalResource(string serverUrl)
+            {
+                var u = new Uri(serverUrl);
+                var b = new UriBuilder(u) { Scheme = u.Scheme.ToLowerInvariant(), Host = u.Host.ToLowerInvariant(), Fragment = string.Empty };
+                return b.Uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+            }
+
+            // 4) PKCE
+            var verifierBytes = RandomNumberGenerator.GetBytes(32);
+            var verifier = Convert.ToBase64String(verifierBytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+            using var sha = SHA256.Create();
+            var challenge = Convert.ToBase64String(sha.ComputeHash(Encoding.ASCII.GetBytes(verifier)))
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+            // 5) CSRF state
+            var state = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16))
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+            _oauthEphemeral[c.Id] = (verifier, state);
+
+            // 6) Redirect + scope (prefer last challenged scopes if any)
+            var redirect = c.OAuthRedirectUrl ?? ResolveRedirect(c, Nav);
+
+            var resource = CanonicalResource(c.ServerUrl);
+            var scope = !string.IsNullOrWhiteSpace(c.LastChallengedScopes)
+                ? c.LastChallengedScopes
+                : (string.IsNullOrWhiteSpace(c.OAuthScopes) ? "openid profile email" : c.OAuthScopes);
+
+            // 7) Authorize URL
+            var authQs = new QueryString("")
+                .Add("response_type", "code")
+                .Add("client_id", c.OAuthClientId ?? "assistant-engine")
+                .Add("redirect_uri", redirect)
+                .Add("scope", scope)
+                .Add("code_challenge", challenge)
+                .Add("code_challenge_method", "S256")
+                .Add("state", state)
+                .Add("resource", resource) // RFC 8707
+                .ToString();
+
+            var fullAuthorize = $"{c.OAuthAuthUrl}{(c.OAuthAuthUrl!.Contains('?') ? "&" : "?")}{authQs.TrimStart('?')}";
+            await Js.InvokeVoidAsync("open", fullAuthorize, "_blank");
+        }
+        catch (Exception ex)
+        {
+            ClientState.StatusMessage($"OAuth start failed: {ex.Message}");
+        }
+    }
+    // END COPY
+
+    static string CanonicalResource(string serverUrl)
+    {
+        var u = new Uri(serverUrl);
+        var builder = new UriBuilder(u)
+    {
+        Scheme = u.Scheme.ToLowerInvariant(),
+        Host   = u.Host.ToLowerInvariant(),
+        Fragment = string.Empty
+    };
+        return builder.Uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+    }
+
+    // BEGIN COPY: HandleOAuthCallbackByState
+    public async Task HandleOAuthCallbackByState(string code, string state)
+    {
+        // match by state
+        var kv = _oauthEphemeral.FirstOrDefault(x => x.Value.State == state);
+        if (string.IsNullOrEmpty(kv.Key))
+        {
+            ClientState.StatusMessage("OAuth state mismatch.");
+            return;
+        }
+
+        var conn = AssistantConfig.McpConnectors.FirstOrDefault(x => x.Id == kv.Key);
+        if (conn is null)
+        {
+            ClientState.StatusMessage("Unknown connector.");
+            return;
+        }
+
+        var verifier = kv.Value.Verifier;
+
+        var origin = new Uri(Nav.BaseUri).GetLeftPart(UriPartial.Authority);
+        var redirectBase = origin.Replace("://localhost", "://127.0.0.1");
+        var redirect = string.IsNullOrWhiteSpace(conn.OAuthRedirectUrl)
+            ? $"{redirectBase}/oauth/callback"
+            : conn.OAuthRedirectUrl.Replace("localhost", "127.0.0.1");
+
+        // Helper: canonical resource (RFC 8707)
+        static string CanonicalResource(string serverUrl)
+        {
+            var u = new Uri(serverUrl);
+            var b = new UriBuilder(u) { Scheme = u.Scheme.ToLowerInvariant(), Host = u.Host.ToLowerInvariant(), Fragment = string.Empty };
+            return b.Uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
+        }
+
+        try
+        {
+            using var http = new HttpClient();
+
+            // Build token request body
+            var formDict = new Dictionary<string, string>
+        {
+            ["grant_type"]    = "authorization_code",
+            ["code"]          = code,
+            ["redirect_uri"]  = redirect,
+            ["code_verifier"] = verifier,
+            ["resource"]      = CanonicalResource(conn.ServerUrl) // RFC 8707
+        };
+
+            // Public vs Confidential
+            if (conn.ClientMode == ClientMode.UserSuppliedConfidential && 
+                !string.IsNullOrWhiteSpace(conn.OAuthClientId) && 
+                !string.IsNullOrWhiteSpace(conn.OAuthClientSecret))
+            {
+                // Prefer Basic auth for confidential token calls
+                var basic = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{conn.OAuthClientId}:{conn.OAuthClientSecret}"));
+                http.DefaultRequestHeaders.Authorization =
+                    new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", basic);
+                // No need to send client_id in body when using Basic (keeps it clean)
+            }
+            else
+            {
+                // Public PKCE: include client_id in body
+                formDict["client_id"] = conn.OAuthClientId ?? "assistant-engine";
+            }
+
+            using var form = new FormUrlEncodedContent(formDict);
+            var resp = await http.PostAsync(conn.OAuthTokenUrl, form);
+            var body = await resp.Content.ReadAsStringAsync();
+
+            if (!resp.IsSuccessStatusCode)
+            {
+                ClientState.StatusMessage($"Token exchange failed: {(int)resp.StatusCode} {resp.ReasonPhrase}. {body}");
+                return;
+            }
+
+            using var doc = System.Text.Json.JsonDocument.Parse(body);
+            var root = doc.RootElement;
+
+            var accessToken  = root.TryGetProperty("access_token", out var at) ? at.GetString() : null;
+            var refreshToken = root.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null;
+            var tokenType    = root.TryGetProperty("token_type", out var tt) ? tt.GetString() : "Bearer";
+            var expiresIn    = root.TryGetProperty("expires_in", out var ei) && ei.TryGetInt32(out var secs) ? secs : (int?)null;
+
+            if (string.IsNullOrWhiteSpace(accessToken))
+            {
+                ClientState.StatusMessage("Token exchange succeeded but no access_token returned.");
+                return;
+            }
+
+            // Persist tokens
+            conn.OAuthAccessToken  = accessToken;
+            conn.OAuthRefreshToken = refreshToken;
+            conn.OAuthExpiryUtc    = expiresIn.HasValue ? DateTime.UtcNow.AddSeconds(expiresIn.Value) : null;
+            conn.Auth              = AuthType.OAuth2;
+
+            // Make transport send the token
+            conn.ApiKeyHeaderName ??= "Authorization";
+            var prefix = string.IsNullOrWhiteSpace(tokenType) ? "Bearer" : tokenType;
+            conn.AuthToken = accessToken.StartsWith(prefix + " ", StringComparison.OrdinalIgnoreCase)
+                ? accessToken
+                : $"{prefix} {accessToken}";
+
+            _oauthEphemeral.Remove(kv.Key);
+
+            // ClientState.StatusMessage("OAuth connected.");
+            await DiscoverTools(conn);
+  
+    }
+    catch (Exception ex)
+    {
+        ClientState.StatusMessage($"OAuth callback failed: {ex.Message}");
+    }
+}
+// END COPY
+
+
+public async Task HandleOAuthCallbackAsync(string connectorId, string code, string state)
+{
+    if (!_oauthEphemeral.TryGetValue(connectorId, out var tmp) || tmp.State != state)
+    {
+        ClientState.StatusMessage("OAuth state mismatch.");
+        return;
+    }
+
+    var conn = AssistantConfig.McpConnectors.FirstOrDefault(x => x.Id == connectorId);
+    if (conn is null)
+    {
+        ClientState.StatusMessage("Unknown connector.");
+        return;
+    }
+
+    var redirect = string.IsNullOrWhiteSpace(conn.OAuthRedirectUrl)
+        ? "http://127.0.0.1:51789/oauth/callback"
+        : conn.OAuthRedirectUrl.Replace("localhost","127.0.0.1");
+
+    using var http = new HttpClient();
+    using var form = new FormUrlEncodedContent(new Dictionary<string,string>
+    {
+        ["grant_type"] = "authorization_code",
+        ["code"] = code,
+        ["redirect_uri"] = redirect,
+        ["client_id"] = conn.OAuthClientId ?? "assistant-engine",
+        ["code_verifier"] = tmp.Verifier
+    });
+
+    var resp = await http.PostAsync(conn.OAuthTokenUrl, form);
+    if (!resp.IsSuccessStatusCode)
+    {
+        ClientState.StatusMessage($"Token exchange failed: {(int)resp.StatusCode} {resp.ReasonPhrase}");
+        return;
+    }
+
+    using var doc = await System.Text.Json.JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync());
+    var root = doc.RootElement;
+
+    conn.OAuthAccessToken  = root.TryGetProperty("access_token", out var at) ? at.GetString() : null;
+    conn.OAuthRefreshToken = root.TryGetProperty("refresh_token", out var rt) ? rt.GetString() : null;
+    if (root.TryGetProperty("expires_in", out var ei) && ei.TryGetInt32(out var secs))
+        conn.OAuthExpiryUtc = DateTime.UtcNow.AddSeconds(secs);
+
+    _oauthEphemeral.Remove(connectorId);
+    ClientState.StatusMessage("OAuth connected.");
+    await DiscoverTools(conn);
+}
+[JSInvokable("AE_ReceiveOAuthCode")]
+public static Task JsReceiveOAuthCode(string code, string state)
+    => Current?.HandleOAuthCallbackByState(code, state) ?? Task.CompletedTask;
+
+    void DisconnectOAuth(McpConnectorConfig c)
+    {
+        c.OAuthAccessToken = null;
+        c.OAuthRefreshToken = null;
+        c.OAuthExpiryUtc = null;
+    }
+}

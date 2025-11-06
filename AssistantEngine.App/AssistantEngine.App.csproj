@@ -113,6 +113,11 @@
 		</Content>
 	</ItemGroup>
 	<ItemGroup>
+	  <MauiAsset Update="..\AssistantEngine.UI\Config\Models\RemoteAssistant.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </MauiAsset>
+	</ItemGroup>
+	<ItemGroup>
 	  <MauiFont Update="Resources\Fonts\OpenSans-Italic.ttf">
 	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
 	  </MauiFont>

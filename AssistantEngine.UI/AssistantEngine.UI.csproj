@@ -17,6 +17,7 @@
 		<DefineConstants>$(DefineConstants);MACCATALYST</DefineConstants>
 	</PropertyGroup>
 	<ItemGroup>
+		<EmbeddedResource Include="Config\mcp-providers.json" />
 		<EmbeddedResource Include="sql\GetTableSchemas.sql" />
 		<PackageReference Include="Dapper" Version="2.1.66" />
 
@@ -86,7 +87,6 @@
 	<ItemGroup>
 		<Folder Include="Services\Implementation\Models\Assistants\" />
 		<Folder Include="wwwroot\Data\" />
-		<Folder Include="wwwroot\img\logos\" />
 		<Folder Include="wwwroot\img\index\" />
 	</ItemGroup>
 	<ItemGroup>

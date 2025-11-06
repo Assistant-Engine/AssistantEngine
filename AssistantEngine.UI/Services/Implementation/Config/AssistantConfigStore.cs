@@ -46,33 +46,39 @@ namespace AssistantEngine.UI.Services.Implementation.Config
         public AssistantConfig? GetById(string id)
             => _map.TryGetValue(id, out var v) ? v.Config : null;
 
-       /* public async Task UpdateAsync(AssistantConfig updated)
+        /* public async Task UpdateAsync(AssistantConfig updated)
+         {
+             // figure out if we're adding or updating
+             var isExisting = _map.TryGetValue(updated.Id, out var entry);
+             // pick existing path or build a new one
+             var path = isExisting
+                 ? entry.Path
+                 : Path.Combine(_folder, $"{updated.Id}.json");
+
+             // 1) stash tools
+             var backup = updated.AssistantModel.Tools;
+             var before = string.Join(", ", updated.EnabledFunctions);
+             var distinct = string.Join(", ", updated.EnabledFunctions?.Distinct());
+
+
+             updated.EnabledFunctions = updated.EnabledFunctions?.Distinct().ToList();
+             // 2) strip them out for storage
+             updated.AssistantModel.Tools = null;
+             // 3) serialize & write
+             //updated.EnabledFunctions
+             var json = JsonConvert.SerializeObject(updated, _settings);
+             await File.WriteAllTextAsync(path, json);
+             // 4) restore in‑memory and upsert
+             updated.AssistantModel.Tools = backup;
+             _map[updated.Id] = (updated, path);
+         }*/
+        public async Task DeleteAsync(string id)
         {
-            // figure out if we're adding or updating
-            var isExisting = _map.TryGetValue(updated.Id, out var entry);
-            // pick existing path or build a new one
-            var path = isExisting
-                ? entry.Path
-                : Path.Combine(_folder, $"{updated.Id}.json");
-
-            // 1) stash tools
-            var backup = updated.AssistantModel.Tools;
-            var before = string.Join(", ", updated.EnabledFunctions);
-            var distinct = string.Join(", ", updated.EnabledFunctions?.Distinct());
-       
-
-            updated.EnabledFunctions = updated.EnabledFunctions?.Distinct().ToList();
-            // 2) strip them out for storage
-            updated.AssistantModel.Tools = null;
-            // 3) serialize & write
-            //updated.EnabledFunctions
-            var json = JsonConvert.SerializeObject(updated, _settings);
-            await File.WriteAllTextAsync(path, json);
-            // 4) restore in‑memory and upsert
-            updated.AssistantModel.Tools = backup;
-            _map[updated.Id] = (updated, path);
-        }*/
-
+            if (!_map.TryGetValue(id, out var entry)) return;
+            if (File.Exists(entry.Path)) File.Delete(entry.Path);
+            _map.Remove(id);
+            await Task.CompletedTask;
+        }
         public async Task UpdateAsync(string originalId, AssistantConfig updated)
         {
             var hasOriginal = _map.TryGetValue(originalId, out var oldEntry);
@@ -85,8 +91,6 @@ namespace AssistantEngine.UI.Services.Implementation.Config
             updated.AssistantModel.Tools = null;
 
             var json = JsonConvert.SerializeObject(updated, _settings);
-
-            // 2) write file (handle rename)
             if (hasOriginal && !string.Equals(originalId, updated.Id, StringComparison.OrdinalIgnoreCase))
             {
                 await File.WriteAllTextAsync(newPath, json);
@@ -99,15 +103,13 @@ namespace AssistantEngine.UI.Services.Implementation.Config
             {
                 var path = hasOriginal ? oldPath! : newPath;
                 await File.WriteAllTextAsync(path, json);
-                newPath = path; // ensure mapping uses actual path
+                newPath = path; 
             }
-
-            // 3) restore in-memory & upsert map
             updated.AssistantModel.Tools = backup;
             _map[updated.Id] = (updated, newPath);
         }
 
-        // keep the old signature for backward compatibility
+
         public async Task UpdateAsync(AssistantConfig updated)
         {
             await UpdateAsync(updated.Id, updated);
@@ -115,13 +117,14 @@ namespace AssistantEngine.UI.Services.Implementation.Config
 
     }
 
-    // 1) Define an interface
+
     public interface IAssistantConfigStore
     {
         IReadOnlyCollection<AssistantConfig> GetAll();
         AssistantConfig? GetById(string id);
         Task UpdateAsync(AssistantConfig updated);
         Task UpdateAsync(string originalId, AssistantConfig updated);
+        Task DeleteAsync(string id);
     }
 
 }

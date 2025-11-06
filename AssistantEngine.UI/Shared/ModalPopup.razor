@@ -1,0 +1,71 @@
+﻿@using AssistantEngine.UI.Services
+@inject IModalService Modal
+
+@if (_isOpen)
+{
+    <div class="modal fade show d-block @_className" style="background:rgba(0,0,0,.6)" @onclick="Close">
+        <div class="modal-dialog modal-dialog-centered @SizeClass" @onclick:stopPropagation>
+            <div class="modal-content p-3 rounded-3 shadow-lg">
+                <div class="modal-header">
+                    <h5 class="modal-title">@_title</h5>
+                    <button type="button" class="btn-close" @onclick="Close"><i class="fi-br-cross fi"></i></button>
+                </div>
+                <div class="modal-body">
+                    @_content
+                </div>
+                <div class="modal-footer">
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    RenderFragment? _content;
+    string? _title;
+    string? _size;
+    bool _isOpen;
+    string? _className;
+
+    string SizeClass => _size switch { "small" => "modal-sm", "large" => "modal-lg", "sm" => "modal-sm", "lg" => "modal-lg", "xl" => "modal-xl", _ => "" };
+
+    protected override void OnInitialized()
+    {
+        Modal.OnShow += HandleShow;
+        Modal.OnClose += HandleClose;
+    }
+
+    void HandleShow(RenderFragment content, string? title, string? size, string? className)
+    {
+        _ = InvokeAsync(() =>
+        {
+            _content = content;
+            _title = title;
+            _size = size;
+            _isOpen = true;
+            _className = className;
+            StateHasChanged();
+        });
+    }
+
+    void HandleClose()
+    {
+        _ = InvokeAsync(() =>
+        {
+            _isOpen = false;
+            _content = null;
+            _title = null;
+            _size = null;
+            StateHasChanged();
+        });
+    }
+
+
+    void Close() => Modal.Close();
+
+    public void Dispose()
+    {
+        Modal.OnShow -= HandleShow;
+        Modal.OnClose -= HandleClose;
+    }
+}

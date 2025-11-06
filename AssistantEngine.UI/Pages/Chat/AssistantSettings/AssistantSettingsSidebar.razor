@@ -1,0 +1,337 @@
+﻿@using System.Data.SqlClient
+@using AssistantEngine.Factories
+@using AssistantEngine.UI.Pages.Chat.AssistantSettings
+@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Extensions
+@using AssistantEngine.UI.Services.Implementation.Config
+@using AssistantEngine.UI.Services.Implementation.Database
+@using AssistantEngine.UI.Services.Implementation.MCP
+@using AssistantEngine.UI.Services.Implementation.Tools
+@using AssistantEngine.UI.Services.Models
+@using Microsoft.AspNetCore.Http
+@using Microsoft.Extensions.AI
+@using System.Text.Json
+@using System.Text
+@using System.Security.Cryptography
+@inherits LayoutComponentBase
+@inject IModalService Modal
+@inject ToolInfoService ToolInfo;
+@inject IAssistantConfigStore ConfigStore;
+@inject ChatClientState clientState;
+
+@if (showSidebar) //dont neccessarily need this here currently but is good for if we want to have hide here in future maybe
+{
+    <aside class="chat-options-sidebar">
+        <EditForm EditContext="_editContext">
+            <h3 class="nav-top">
+                <span>Assistant</span>
+                @if (isDirty)
+                {
+                    <span class="badge bg-warning-subtle text-warning ms-2">Unsaved</span>
+                }
+
+                <div class="ms-auto d-inline-flex icon-btn-row">
+                    @if (isDirty)
+                    {
+                        <button class="btn btn-default icon-btn" @onclick="SaveAssistant" title="Save (Ctrl+S)">
+                            <i class="fi fi-br-disk"></i><span class="btn-label">Save</span>
+                        </button>
+                        <button class="btn btn-default icon-btn" @onclick="DiscardChanges" title="Discard">
+                            <i class="fi fi-br-undo"></i><span class="btn-label">Discard</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn-default icon-btn" @onclick="NewConfig" title="Add new (Ctrl+N)">
+                            <i class="fi fi-br-plus"></i><span class="btn-label">Add</span>
+                        </button>
+
+                        <div class="more-wrap">
+                            <button type="button" class="btn btn-default icon-btn more-btn" @onclick="ToggleMore" title="More">
+                                <i class="fi fi-br-menu-dots"></i>@*<span class="btn-label">More</span>*@
+                            </button>
+
+                            @if (showMore)
+                            {
+                                <div class="more-menu shadow-2">
+                                    <button type="button" class="more-item" @onclick="DuplicateConfig">
+                                        <i class="fi fi-br-copy me-1"></i><span>Duplicate</span>
+                                    </button>
+                                    <button type="button" class="more-item danger" @onclick="DeleteCurrent">
+                                        <i class="fi fi-br-trash me-1"></i><span>Delete</span> @*look at some point we are going to want an addiional modal step for the delete because for one if there was an evaluation relying on it it willbreak the application*@
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </h3>
+
+
+            <section class="preset-section">
+                <div class="preset-bar d-flex align-items-center gap-2">
+                    <h4><i class="fi fi-br-box"></i><span class="header-text-1">Preset</span></h4>
+
+               
+                </div>
+                <dl class="mt-2">
+                    <dt>Name</dt>
+                    <dd><InputText @bind-Value="AssistantConfig.Name" class="form-control mot2" @oninput="(_) => isDirty = true" /></dd>
+                    <p class="text-muted small mt-2">Changes apply immediately; click Save to persist for future sessions.</p>
+                </dl>
+
+            </section>
+            <CascadingValue Value="AssistantConfig">
+                <CascadingValue Name="SaveAssistant" Value="(Func<Task>)SaveAssistant">
+                    <CascadingValue Name="MarkDirty" Value="(Action)(() => isDirty = true)">
+                        <ModelServerSection />
+                        <ModelSettingsSection />
+                        <SystemSettingsSection />
+                        <IngestionSettingsSection />
+                        <DatabaseSettingsSection />
+                        <McpSettingsSection />
+                    </CascadingValue>
+                </CascadingValue>
+            </CascadingValue>
+            
+         
+            <section>
+                <h4><i class="fi fi-br-lock"></i><span class="header-text-1">Non-Configurable</span></h4>
+                <dl class="text-secondary small">
+               
+              
+                    <dt>
+                        <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                           title="Tools built in and configured with this model"></i>
+                        Tools
+                    </dt>
+                    <dd id="tools-options-cont">
+                        @foreach (var tool in AssistantConfig.AssistantModel.Tools.GetNativeTools() ?? Enumerable.Empty<AITool>())
+                        {
+                            <div class="badge badge-1" @onclick="() => OpenToolModal(tool)">@tool.Name.Split("/").Last()</div>
+                        }
+
+           
+
+                    </dd>
+                    @*<dt>
+                        <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                           title="Sequences at which the model will stop generating"></i>
+                        Stop Sequences
+                    </dt>
+                    <dd>@string.Join(", ", AssistantConfig.AssistantModel.StopSequences ?? Array.Empty<string>())</dd>*@
+
+               
+                </dl>
+            </section>
+            <section id="wipe">
+                <button class="wipe-btn"
+                        @onclick="@(() => WipeVectorStores())">
+                    Delete Vector Stores
+                </button>
+            </section>
+        </EditForm>
+    </aside>
+}
+
+@code {
+    [Parameter]
+    public AssistantConfig AssistantConfig { get; set; } = new();
+
+    private Dictionary<DatabaseConfiguration, DatabaseConfiguration> lastSaved = new();
+    [Parameter]
+    public EventCallback OnStateChange { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public Dictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool showSidebar = true;
+    private void ToggleSidebar()
+    {
+        showSidebar = !showSidebar;
+    }
+    private string? _originalId;
+    private EditContext? _editContext;
+    private bool isDirty;
+
+    private void HandleFieldChanged(object? sender, FieldChangedEventArgs e)
+        => isDirty = true;
+    protected override void OnParametersSet()
+    {
+        if (_editContext?.Model != AssistantConfig)
+        {
+            RebindEditContext();
+        }
+
+        if (string.IsNullOrWhiteSpace(_originalId) && !string.IsNullOrWhiteSpace(AssistantConfig?.Id))
+            _originalId = AssistantConfig.Id;
+    }
+
+    private async Task SaveAssistant()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(AssistantConfig.Name))
+                AssistantConfig.Name = AssistantConfig.Id; // fallback only
+
+            // Do NOT change Id here. Save name-only change.
+            await ConfigStore.UpdateAsync(_originalId!, AssistantConfig);
+            await clientState.ChangeModelAsync(AssistantConfig.Id);
+            _originalId = AssistantConfig.Id;
+
+            clientState.StatusMessage("Model saved successfully");
+            await OnStateChange.InvokeAsync();
+            isDirty = false;
+            await ReloadFromStoreAsync(AssistantConfig.Id);
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            clientState.StatusMessage($"Save failed: {ex.Message}");
+        }
+    }
+    // ADD THIS helper
+    private void RebindEditContext()
+    {
+        if (_editContext != null) _editContext.OnFieldChanged -= HandleFieldChanged;
+        _editContext = new EditContext(AssistantConfig);
+        _editContext.OnFieldChanged += HandleFieldChanged;
+        isDirty = false;
+    }
+  
+
+
+    private async Task ReloadFromStoreAsync(string id)
+    {
+        var fresh = ConfigStore.GetById(id) ?? ConfigStore.GetAll().FirstOrDefault();
+        if (fresh is null) return;
+
+        AssistantConfig = fresh.Clone();   // or store already returns a copy
+        RebindEditContext();               // <-- single place that handles it
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task DiscardChanges()
+    {
+        var id = string.IsNullOrWhiteSpace(_originalId) ? AssistantConfig.Id : _originalId;
+        await ReloadFromStoreAsync(id);    // this already rebinds + clears isDirty
+        // inside DiscardChanges, after ReloadFromStoreAsync:
+        await clientState.ChangeModelAsync(id);
+
+        clientState.StatusMessage("Changes discarded.");
+    }
+
+    private async Task NewConfig()
+    {
+        var baseName = "Untitled";
+        var name = EnsureUniqueLabel(baseName);
+        var id = EnsureUniqueId(Slugify(name));
+
+        var cfg = new AssistantConfig
+        {
+            Id = id,
+            Name = name,
+            ModelProvider = "Ollama",
+            ModelProviderUrl = "http://localhost:11434",
+            ModelOptions = AssistantConfig.ModelOptions?.Select(m => m.Clone()).ToList() ?? new(),
+            Databases = new(),
+            IngestionPaths = new(),
+            McpConnectors = new()
+        };
+
+        await ConfigStore.UpdateAsync(id, cfg);
+        await clientState.ChangeModelAsync(id);
+        AssistantConfig = cfg;
+        _originalId = id;
+        RebindEditContext();
+        await OnStateChange.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private async Task DuplicateConfig()
+    {
+        var newName = EnsureUniqueLabel($"{(string.IsNullOrWhiteSpace(AssistantConfig.Name) ? AssistantConfig.Id : AssistantConfig.Name)} (copy)");
+        var newId = EnsureUniqueId(Slugify(newName));
+
+        var clone = AssistantConfig.Clone();
+        clone.Id = newId;
+        clone.Name = newName;
+
+        await ConfigStore.UpdateAsync(newId, clone);
+        await clientState.ChangeModelAsync(newId);
+        AssistantConfig = clone;
+        _originalId = newId;
+        RebindEditContext();
+        await OnStateChange.InvokeAsync();
+        StateHasChanged();
+    }
+
+    private string EnsureUniqueId(string baseId)
+    {
+        var ids = new HashSet<string>(ConfigStore.GetAll().Select(c => c.Id), StringComparer.OrdinalIgnoreCase);
+        if (!ids.Contains(baseId)) return baseId;
+        var i = 2; while (ids.Contains($"{baseId}-{i}")) i++; return $"{baseId}-{i}";
+    }
+
+    private string EnsureUniqueLabel(string baseLabel)
+    {
+        var names = new HashSet<string>(ConfigStore.GetAll().Select(c => c.Name ?? ""), StringComparer.OrdinalIgnoreCase);
+        var label = string.IsNullOrWhiteSpace(baseLabel) ? "Untitled" : baseLabel;
+        if (!names.Contains(label)) return label;
+        var i = 2; while (names.Contains($"{label} ({i})")) i++; return $"{label} ({i})";
+    }
+
+    private static string Slugify(string s)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return "untitled";
+        var slug = new string(s.Trim()
+            .Select(ch => char.IsLetterOrDigit(ch) ? char.ToLowerInvariant(ch) : '-')
+            .ToArray());
+        while (slug.Contains("--")) slug = slug.Replace("--", "-");
+        return slug.Trim('-');
+    }
+
+    private bool showMore;
+
+
+    private void ToggleMore() => showMore = !showMore;
+    [JSInvokable] public void CloseMoreMenu() { showMore = false; StateHasChanged(); }
+
+
+    private async Task DeleteCurrent()
+    {
+        var id = _originalId ?? AssistantConfig.Id;
+        if (string.IsNullOrWhiteSpace(id)) return;
+
+        // need to add a confirm modal here at some point
+        await ConfigStore.DeleteAsync(id);
+
+        var next = ConfigStore.GetAll().FirstOrDefault();
+        if (next is null)
+        {
+            // if none left, create a fresh one
+            await NewConfig();
+            showMore = false;
+            return;
+        }
+
+        await clientState.ChangeModelAsync(next.Id);
+        AssistantConfig = next.Clone();
+        _originalId = next.Id;
+        RebindEditContext();                 
+        showMore = false;
+    }
+
+    void OpenToolModal(AITool tool)
+    {
+        if (tool is AIFunction fn)
+        {
+            var content = ToolInfo.Build(fn);
+            Modal.Show(content, "About Tool: " + fn.Name, size: "sm", className: "tool-modal");
+        }
+    }
+
+    private async Task WipeVectorStores()
+    {
+        await clientState.RecreateAndReingestAsync();
+    }
+}

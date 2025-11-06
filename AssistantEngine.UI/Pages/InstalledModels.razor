@@ -9,6 +9,7 @@
 @using OllamaSharp.Models
 @inject OllamaImportService ModelService
 @inject IAppHealthService Health
+@inject IModelCache ModelCache
 
 
 <div id="ollama-import-page" class="">
@@ -41,24 +42,70 @@
                                     <th>Quant</th>
                                     <th>Arch</th>
                                     <th>Parameters</th>
-                                  
                                     <th>Modified</th>
                                     <th>Size</th>
+                                    <th class="more-col"></th>
                                 </tr>
                             </thead>
+
                             <tbody>
-                                @foreach (var m in local_models.OrderBy(x => x.Name))
+                                @{
+                                    var runningSet = new HashSet<string>(running_models.Select(r => r.Name));
+                                }
+
+                                @foreach (var m in local_models
+                                                            .OrderBy(m => !runningSet.Contains(m.Name))
+                                                            .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
                                 {
-                                    bool running = running_models.Exists(x => m.Name == x.Name && x.Digest == m.Digest);
-                                    <tr class="local-model-row @(running ? "running" : null)" title="@m.Digest">
-                                        <td class="model-name"><div class="model-name-div">@m.Name</div></td>
+                                    
+                                        bool running = runningSet.Contains(m.Name);
+                             
+                                    <tr @key="m.Name" class="local-model-row @(running ? "running" : null)" title="@m.Digest">
+                                        <td class="model-name">
+                                            <div class="model-name-div">@m.Name</div>
+                                            @if (running)
+                                            {
+                                                <span class="badge-running">● Running</span>
+                                            }
+                                        </td>
                                         <td class="model-quant-level"><div class="model-quant-level-div">@NA(m.Details?.QuantizationLevel)</div></td>
                                         <td class="model-familiy"><div class="model-familiy-div">@FamilyOf(m.Details?.Family, m.Details?.Families)</div></td>
                                         <td class="model-param-size"><div class="model-param-size-div">@NA(m.Details?.ParameterSize)</div></td>
-                                        
                                         <td class="model-modified-time"><div class="model-modified-time-div">@m.ModifiedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</div></td>
                                         <td class="model-size"><div class="model-size-div">@FormatBytes(m.Size)</div></td>
 
+                                        <td class="more-col">
+                                            <div class="more-wrap">
+                                                <button type="button" class="btn btn-default icon-btn more-btn"
+                                                        @onclick="() => ToggleMore(m)" title="More">
+                                                    <i class="fi fi-br-menu-dots"></i>
+                                                </button>
+
+                                                @if (IsMenuOpen(m))
+                                                {
+                                                    <div class="more-menu shadow-2">
+                                                        @if (!running)
+                                                        {
+                                                            <button type="button" class="more-item"
+                                                                    disabled="@(IsBusy(m))"
+                                                                    @onclick="() => LoadModel(m, -1)">
+                                                                <i class="fi fi-br-cpu me-1"></i><span>Load to GPU</span>
+                                                            </button>
+                                                        }
+                                                        else
+                                                        {
+
+
+                                                            <button type="button" class="more-item danger"
+                                                                    disabled="@(IsBusy(m))"
+                                                                    @onclick="() => UnloadModel(m)">
+                                                                <i class="fi fi-br-power me-1"></i><span>Unload from GPU</span>
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        </td>
                                     </tr>
                                 }
                             </tbody>
@@ -71,125 +118,84 @@
         </div>
     </div>
 </div>
-
 @code {
     private List<OllamaImportModel>? models;
-      private bool loading;
-      private string? _loadError;
-    private string FormatBytes(long bytes)
-    {
-        if (bytes >= 1_000_000_000)
-            return $"{bytes / 1_000_000_000.0:F2} GB";
-        if (bytes >= 1_000_000)
-            return $"{bytes / 1_000_000.0:F2} MB";
-        if (bytes >= 1_000)
-            return $"{bytes / 1_000.0:F2} KB";
-        return $"{bytes} B";
-    }
+    private string? _loadError;
+    private readonly HashSet<string> _busy = new();
+    private readonly Dictionary<string, bool> _rowMenu = new();
+
+    private List<Model> local_models = new();
+    private List<RunningModel> running_models = new();
+    private bool loading;
 
     IOllamaApiClient Client => ClientState.OllamaClient;
-    private List<Model> local_models;
-    private List<RunningModel> running_models;
-    private async Task LoadModelsAsync(CancellationToken token)
+
+    protected override async Task OnInitializedAsync()
     {
-        var list = await Client.ListLocalModelsAsync(token);
-        var runningList = await Client.ListRunningModelsAsync(token);
+        ModelCache.Changed += OnCacheChanged;
+        await ModelCache.EnsureStartedAsync();
+        models = await ModelService.GetModelsAsync();
+        Snapshot();
+    }
 
-        running_models = runningList.ToList();
-        local_models = list.ToList();
-
-        // keep SelectedModel valid if the previously selected one no longer exists
-    
-    } private readonly CancellationTokenSource cts = new();
-    // NEW: public refresh you can call from parent after a download
-    public async Task RefreshAsync()
+    private void OnCacheChanged()
     {
-        loading = true;
-        _loadError = null;
-        await InvokeAsync(StateHasChanged);
+        Snapshot();
+        InvokeAsync(StateHasChanged);
+    }
 
+    private void Snapshot()
+    {
+        loading = false;
+        local_models = ModelCache.LocalModels.ToList();
+        running_models = ModelCache.RunningModels.ToList();
+    }
+
+    private string KeyOf(Model m) => m.Name;
+    private string KeyOf(string name, string? digest) => name;
+    private string KeyOf(RunningModel r) => r.Name;
+
+    private bool IsMenuOpen(Model m) => _rowMenu.TryGetValue(KeyOf(m), out var v) && v;
+    private bool IsBusy(Model m) => _busy.Contains(KeyOf(m));
+    private void ToggleMore(Model m) => _rowMenu[KeyOf(m)] = !_rowMenu.GetValueOrDefault(KeyOf(m));
+
+    private async Task LoadModel(Model m, int seconds = -1)
+    {
+        var key = KeyOf(m);
+        if (!_busy.Add(key)) return;
         try
         {
-            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
-            await LoadModelsAsync(linked.Token);
+            var keepAlive = seconds < 0 ? "-1m" : $"{seconds}";
+            var req = new GenerateRequest { KeepAlive = keepAlive, Model = m.Name, Prompt = " ", Stream = false };
+            await foreach (var _ in Client.GenerateAsync(req)) { break; }
+            _rowMenu[key] = false;
+            await ModelCache.RefreshNowAsync();
         }
-        catch (OperationCanceledException)
-        {
-            _loadError = "Model list request timed out.";
-        }
-        catch (Exception ex)
-        {
-            _loadError = $"Couldn't fetch models: {ex.Message}";
-        }
-        finally
-        {
-            loading = false;
-            await InvokeAsync(StateHasChanged);
-        }
+        finally { _busy.Remove(key); }
     }
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+
+    private async Task UnloadModel(Model m)
     {
-        if (!firstRender) return;
-
-        loading = true;
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            var lDotNetReference = DotNetObjectReference.Create(this);
-        
-
-            var ollama = Health.Get(HealthDomain.Ollama);
-            if (ollama.Level != HealthLevel.Healthy)
-            {
-                _loadError = ollama.Error ?? "Ollama server not reachable.";
-                return;
-            }
-
-            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
-            await LoadModelsAsync(linked.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            _loadError = "Model list request timed out.";
-        }
-        catch (Exception ex)
-        {
-            _loadError = $"Couldn't fetch models: {ex.Message}";
-        }
-        finally
-        {
-            loading = false;
-            await InvokeAsync(StateHasChanged);
-        }
+        await LoadModel(m, 0);
+        _rowMenu[KeyOf(m)] = false;
+        await ModelCache.RefreshNowAsync();
     }
+    private ConfigDropdown configDD;
     private static string NA(string? v) => string.IsNullOrWhiteSpace(v) ? "—" : v;
     private static string FamilyOf(string? family, string[]? families)
         => !string.IsNullOrWhiteSpace(family) ? family
            : (families is { Length: > 0 } ? string.Join(", ", families) : "—");
- 
 
-    private void ToggleDropdown(OllamaImportModel model) =>
-        model.IsExpanded = !model.IsExpanded;
-  
-    private ConfigDropdown configDD;
-    private async Task HandleModelAssistantSelected(AssistantConfig model)
+    private string FormatBytes(long bytes)
     {
-        await RefreshAsync();
+        if (bytes >= 1_000_000_000) return $"{bytes / 1_000_000_000.0:F2} GB";
+        if (bytes >= 1_000_000) return $"{bytes / 1_000_000.0:F2} MB";
+        if (bytes >= 1_000) return $"{bytes / 1_000.0:F2} KB";
+        return $"{bytes} B";
     }
 
- /*  
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private async Task HandleModelAssistantSelected(AssistantConfig model)
     {
-        if (firstRender)
-        {
-            models = await ModelService.GetModelsAsync();
-        }
-      
-    }*/ protected override async Task OnInitializedAsync()
-    {
-        models = await ModelService.GetModelsAsync();
+        await ModelCache.RefreshNowAsync();
     }
 }

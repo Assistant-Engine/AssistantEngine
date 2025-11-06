@@ -14,9 +14,11 @@ using AssistantEngine.UI.Services.Implementation.MCP;
 using AssistantEngine.UI.Services.Implementation.Notifications;
 using AssistantEngine.UI.Services.Implementation.Ollama;
 using AssistantEngine.UI.Services.Implementation.Startup;
+using AssistantEngine.UI.Services.Implementation.Tools;
 using AssistantEngine.UI.Services.Models;
 using AssistantEngine.UI.Services.Models.Ingestion;
 using AssistantEngine.UI.Services.Notifications;
+using AssistantEngine.UI.Services.Ollama;
 using AssistantEngine.UI.Services.Options;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -96,19 +98,17 @@ public static class DependencyInjection
             return new SqlLiteEvaluationStore(cs);
         });
 
-
-
+        //for modal/popups
+        services.AddSingleton<IModalService, ModalService>();
+        services.AddSingleton<ToolInfoService>();
         services.AddHostedService<EvaluationSchedulerService>();
         // Chat / Ollama client factories
-        services.AddSingleton<IOllamaClientResolver, OllamaClientResolver>();
-        services.AddSingleton<IChatRepository, FileChatRepository>();
+        // after other services
+        services.AddScoped<IModelCache, OllamaModelCache>();
 
-        /*services.AddScoped<ChatClientFactory>(sp => modelId =>
-        {
-            var state = sp.GetRequiredService<ChatClientState>();
-            var resolver = sp.GetRequiredService<IOllamaClientResolver>();
-            return (IChatClient)resolver.For(state.Config, modelId);
-        });*/
+        services.AddSingleton<IOllamaClientResolver, OllamaClientResolver>();
+        services.AddSingleton<IChatRepository, JsonChatRepository>();
+
         services.AddScoped<ChatClientFactory>(sp => modelId =>
         {
             var state = sp.GetRequiredService<ChatClientState>();
@@ -197,6 +197,7 @@ public static class DependencyInjection
         });
 
         services.AddMemoryCache();
+        services.AddHttpClient<IMcpProviderCatalog, McpProviderCatalog>();
         services.AddHttpClient<OllamaImportService>();
         services.AddScoped<DataIngestor>();
         services.AddScoped<SemanticSearch>();

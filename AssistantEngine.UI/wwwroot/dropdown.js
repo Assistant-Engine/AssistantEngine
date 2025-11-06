@@ -94,6 +94,49 @@ window.GLOBAL.toastrInterop = {
         }
     }, true); 
 })();
+// === OAuth helpers (integrated with GLOBAL) ===
+(function (global) {
+    const $w = $(window);
+    GLOBAL.OAuth = GLOBAL.OAuth || {};
+    let installed = false;
+
+    async function deliver(code, state) {
+        // prefer static JSInvokable (no instance ref needed)
+        async function callDotNet() {
+            if (global.DotNet && typeof global.DotNet.invokeMethodAsync === 'function') {
+                return global.DotNet.invokeMethodAsync('AssistantEngine.UI', 'AE_ReceiveOAuthCode', code, state);
+            }
+            throw new Error('DotNet not ready');
+        }
+
+        // retry until Blazor boots
+        for (let i = 0; i < 50; i++) {
+            try { await callDotNet(); break; }
+            catch { await new Promise(r => setTimeout(r, 100)); }
+        }
+    }
+
+    function onMessage(e) {
+        const evt = e.originalEvent || e;
+        const d = evt && evt.data;
+        if (!d || d.type !== 'AE_OAUTH_CODE') return;
+        deliver(d.code, d.state);
+    }
+
+    function install() {
+        if (installed) return;
+        installed = true;
+        $w.on('message.ae.oauth', onMessage);
+    }
+
+    // optional: allow Razor /oauth/callback page to call directly
+    GLOBAL.OAuth.deliver = deliver;
+    GLOBAL.OAuth.install = install;
+
+    // auto-install when DOM is ready
+    $(install);
+})(window);
+
 
 
 
@@ -165,6 +208,44 @@ document.addEventListener('DOMContentLoaded', () => {
         $t.find('.more').toggle(!open);
         $(this).text(open ? 'Show more' : 'Show less');
     });
+    // keep your existing click handler
+
+    window.ai = window.ai || {};
+
+    // scan for overflow (unchanged)
+    window.ai.scanThinks = function () {
+        $('think').each(function () {
+            var $t = $(this), el = $t.find('.body')[0];
+            if (!el) return;
+            var overflow = el.scrollHeight > el.clientHeight + 1;
+            $t.toggleClass('has-overflow', overflow);
+         //   if (!overflow) $t.removeClass('open'); // avoid stuck "Show less"
+        });
+    };
+
+    // observe streaming updates and rescan (throttled)
+    window.ai._attached = window.ai._attached || {};
+    window.ai.observeThinks = function (selector) {
+        var $root = $(selector);
+        if (!$root.length) return;
+
+        var key = $root[0];
+        if (window.ai._attached[key]) return; // don't double-attach
+
+        var t;
+        var scan = function () {
+            clearTimeout(t);
+            t = setTimeout(window.ai.scanThinks, 50); // throttle bursty updates
+        };
+
+        var obs = new MutationObserver(scan);
+        obs.observe($root[0], { childList: true, subtree: true, characterData: true });
+        window.ai._attached[key] = obs;
+
+        // initial pass
+        window.ai.scanThinks();
+    };
+
 
     // Any other jQuery .on('click') handlers that reference Blazor-rendered elements go here
     /*$(document).off('click.ollama').on('click.ollama', 'a[href^="/library/"]', function (e) {

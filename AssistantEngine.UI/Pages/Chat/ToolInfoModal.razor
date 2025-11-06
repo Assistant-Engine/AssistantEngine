@@ -1,0 +1,113 @@
+﻿@using Microsoft.Extensions.AI
+@using System.Text
+@using System.Text.Json
+
+<div class="p-2">
+    @if (Function is null)
+    {
+        <p class="text-muted">No tool selected.</p>
+    }
+    else
+    {
+        <h6 class="mb-2">Description</h6>
+        <p class="mb-3">@Function.Description</p>
+
+        @if (TryExtractParams(Function.JsonSchema, out var @params))
+        {
+            <h6 class="mb-2">Parameters</h6>
+            <ul class="list-unstyled small mb-3">
+                @foreach (var p in @params)
+                {
+                    <li class="mb-2">
+                        <b>@p.Name</b>
+                        @if (!string.IsNullOrWhiteSpace(p.Type))
+                        {
+                            <span class="text-muted"> (@p.Type)</span>
+                        }
+                        @if (p.Required)
+                        {
+                            <span class="badge bg-secondary ms-1">required</span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(p.Description))
+                        {
+                            <div>@p.Description</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(p.Default))
+                        {
+                            <div class="text-muted">default: @p.Default</div>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (Function.AdditionalProperties?.Any() == true)
+        {
+            <h6 class="mb-2">Additional Properties</h6>
+            <ul class="list-unstyled small">
+                @foreach (var kv in Function.AdditionalProperties)
+                {
+                    <li><span class="text-muted">@kv.Key:</span> <span>@kv.Value</span></li>
+                }
+            </ul>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public AIFunction? Function { get; set; }
+
+    record ParamInfo(string Name, string? Type, string? Description, bool Required, string? Default);
+
+    static bool TryExtractParams(JsonElement schema, out List<ParamInfo> list)
+    {
+        list = new();
+        if (schema.ValueKind != JsonValueKind.Object) return false;
+
+        var requiredSet = new HashSet<string>(StringComparer.Ordinal);
+        if (schema.TryGetProperty("required", out var req) && req.ValueKind == JsonValueKind.Array)
+            foreach (var r in req.EnumerateArray())
+                if (r.ValueKind == JsonValueKind.String) requiredSet.Add(r.GetString()!);
+
+        if (!schema.TryGetProperty("properties", out var props) || props.ValueKind != JsonValueKind.Object)
+            return false;
+
+        foreach (var prop in props.EnumerateObject())
+        {
+            var name = prop.Name;
+            var val = prop.Value;
+
+            var type = GetTypeString(val);
+            var desc = val.TryGetProperty("description", out var dEl) && dEl.ValueKind == JsonValueKind.String ? dEl.GetString() : null;
+            var def = val.TryGetProperty("default", out var defEl) ? SafeScalarToString(defEl) : null;
+            var reqd = requiredSet.Contains(name);
+
+            list.Add(new ParamInfo(name, type, desc, reqd, def));
+        }
+
+        return list.Count > 0;
+    }
+
+    static string? GetTypeString(JsonElement el)
+    {
+        if (el.TryGetProperty("type", out var tEl))
+        {
+            if (tEl.ValueKind == JsonValueKind.String) return tEl.GetString();
+            if (tEl.ValueKind == JsonValueKind.Array)
+                return string.Join(" | ", tEl.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()));
+        }
+        if (el.TryGetProperty("oneOf", out var one) && one.ValueKind == JsonValueKind.Array) return "oneOf";
+        if (el.TryGetProperty("anyOf", out var any) && any.ValueKind == JsonValueKind.Array) return "anyOf";
+        if (el.TryGetProperty("allOf", out var all) && all.ValueKind == JsonValueKind.Array) return "allOf";
+        return null;
+    }
+
+    static string? SafeScalarToString(JsonElement el) => el.ValueKind switch
+    {
+        JsonValueKind.String => el.GetString(),
+        JsonValueKind.Number => el.GetRawText(),
+        JsonValueKind.True => "true",
+        JsonValueKind.False => "false",
+        _ => null
+    };
+}

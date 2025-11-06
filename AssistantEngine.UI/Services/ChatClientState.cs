@@ -215,20 +215,12 @@ namespace AssistantEngine.Factories
                 });
             }
 
-
-
-            // trigger or reuse ingestion
-            OnStatusMessage?.Invoke($"Ingesting data for “{id}”…");
+          //  OnStatusMessage?.Invoke($"Ingesting data for “{Config.Name}”…");
             var ingestTask = _ingestionTasks.GetOrAdd(id, _ => IngestDataAsync(Config));
             await ingestTask;
             IngestionFinished = true;
-            OnStatusMessage?.Invoke($"Model “{id}” ready");
-
-            // wire up tools…
+            OnStatusMessage?.Invoke($"Model “{Config.Name}” ready");
             ChatOptions = Config.WithEnabledToolsAndMcp(_services);
-    
-            // start with built-in .NET tools (your ITool reflection path)
-      
 
         }
         public void RefreshTools()

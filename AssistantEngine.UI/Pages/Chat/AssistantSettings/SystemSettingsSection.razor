@@ -1,0 +1,19 @@
+﻿@inherits AssistantSettingsBase
+<section id="system-settings">
+    <h4><i class="fi fi-br-settings"></i><span class="header-text-1">Context</span></h4>
+    <dl>
+        <dt>
+            <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+               title="Controls randomness: lower values make output more deterministic; higher values increase variability (0.0–1.0)"></i>
+            System Prompt
+        </dt>
+        <dd class="d-flex align-items-center context-op-inner">
+            <InputTextArea @bind-Value="AssistantConfig.SystemPrompt"
+                           class="form-control mot2" />
+        </dd>
+
+    </dl>
+</section>
+@code {
+
+}

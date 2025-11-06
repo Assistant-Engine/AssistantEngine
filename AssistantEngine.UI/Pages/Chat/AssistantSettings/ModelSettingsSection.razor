@@ -1,0 +1,131 @@
+﻿@inherits AssistantSettingsBase
+<section class="model-config-section">
+    <h4>
+        <i class="fi fi-br-brain-lightning"></i>
+        <span class="header-text-1">Model Configuration</span>
+    </h4>
+    <dl>
+        @foreach (var model in AssistantConfig.ModelOptions)
+        {
+            var item = model;  @* local copy to fix closure *@
+            <div @key="item.Key" class="model-config-block mb-4">
+                <dt class="model-label"
+                    @onclick="() => ToggleModel(item.Key)"
+                    style="cursor: pointer; display: flex; align-items: center;">
+                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                       title='@(item.Key == "Embedding"
+                                                                                                                 ? "It is not advisable to change this as it will require re-embedding vector store"
+                                                                                                                 : "")'>
+                </i>
+                <span>@item.Label</span>
+                <i class="fi fi-br-angle-@(_expanded.Contains(item.Key) ? "up" : "down") ms-auto"></i>
+            </dt>
+
+            @if (_expanded.Contains(item.Key))
+                {
+                    <dd class="tokencount-op-inner">
+
+
+                        <div class="chatoption-subblock mt-2 px-2">
+                            <div class="form-group mb-2">
+                                <label>
+
+                                    Model Id
+                                </label>
+                                <ModelDropdown OnSelect="@(async selected =>
+                                                                                                                                                                        {
+                                                   item.Options.ModelId = selected.Name;
+                                                   
+                                                   await OnStateChange.InvokeAsync();
+                                               })"
+                                                 SelectedModel="@item.Options.ModelId" />
+                              </div>
+
+                            <div class="form-group mb-2">
+                                <label>
+                                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                                       title="Controls randomness: lower values make output more deterministic; higher values increase variability (0.0–1.0)"></i>
+                                    Temperature
+                                </label>
+                                <div class="temp-op-inner">
+                                    <input type="range"
+                                           @bind="item.Options.Temperature"
+                                           min="0" max="1" step="0.1"
+                                           class="form-range flex-grow-1 range-temp" />
+                                    <span id="temp-option-num" class="ms-2">@item.Options.Temperature</span>
+                                </div>
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>
+                                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                                       title="Keep tokens whose cumulative probability mass ≤ this value (0.0–1.0)"></i>
+                                    Top P
+                                </label>
+                                <InputNumber @bind-Value="item.Options.TopP"
+                                             class="form-control"
+                                             step="0.01"
+                                             placeholder="default" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>
+                                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                                       title="Keep only the highest-probability K tokens"></i>
+                                    Top K
+                                </label>
+                                <InputNumber @bind-Value="item.Options.TopK"
+                                             class="form-control"
+                                             step="1"
+                                             placeholder="default" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>
+                                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                                       title="Maximum number of tokens the model can generate"></i>
+                                    Max Output Tokens
+                                </label>
+                                <InputNumber @bind-Value="item.Options.MaxOutputTokens"
+                                             class="form-control"
+                                             placeholder="unlimited" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>
+                                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                                       title="Discourage new topics by penalizing new tokens once they appear"></i>
+                                    Presence Penalty
+                                </label>
+                                <InputNumber @bind-Value="item.Options.PresencePenalty"
+                                             class="form-control"
+                                             step="0.1"
+                                             placeholder="0" />
+                            </div>
+
+                            <div class="form-group mb-2">
+                                <label>
+                                    <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
+                                       title="Discourage repeated tokens by applying a penalty each time they appear"></i>
+                                    Frequency Penalty
+                                </label>
+                                <InputNumber @bind-Value="item.Options.FrequencyPenalty"
+                                             class="form-control"
+                                             step="0.1"
+                                             placeholder="0" />
+                            </div>
+                        </div>
+                    </dd>
+                }
+            </div>
+        }
+    </dl>
+</section>
+@code {
+    private HashSet<string> _expanded = new();
+    private void ToggleModel(string key)
+    {
+        if (!_expanded.Add(key))
+            _expanded.Remove(key);
+    }
+}

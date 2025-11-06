@@ -8,8 +8,9 @@
 <ul class="chat-history-list">
     <li class="has-sub @(showSessions ? "active" : "")">
         <div href="#" class="nav-link nav-link-t nav-top" @onclick="ToggleSessions">Chats
-        <button class="btn-default new-chat-button" @onclick="@OnNewChat">
+            <button class="btn-default new-chat-button icon-btn  icon-btn-label-left" @onclick="@OnNewChat">
             <i class="fi fi-br-plus"></i>
+                <span class="btn-label">New Chat</span>
         </button>
         </div>
         <ul class="sub-menu" style="@(showSessions ? "display:block" : "display:none")">

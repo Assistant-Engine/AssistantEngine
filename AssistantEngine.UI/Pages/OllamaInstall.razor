@@ -11,7 +11,7 @@
 @inject OllamaImportService ModelService
 @inject IAppHealthService Health
 
-
+@inject IModelCache ModelCache
 @if (loading)
 {
     <PageSpinner1></PageSpinner1>
@@ -136,16 +136,44 @@ else
     </div>
 }
 
-
 @code {
     private List<OllamaImportModel>? models;
     private OllamaImportModel? SelectedModel;
-
     private List<Model> local_models = new();
     private List<RunningModel> running_models = new();
     private bool loading;
     private string? _loadError;
     private string search = "";
+    private ConfigDropdown @configDD;
+
+    IOllamaApiClient Client => ClientState.OllamaClient;
+
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        models = await ModelService.GetModelsAsync();
+        if (models?.Count > 0) SelectedModel = models[0];
+
+        ModelCache.Changed += OnCacheChanged;
+        await ModelCache.EnsureStartedAsync();
+        Snapshot();
+        loading = false;
+    }
+
+    private void OnCacheChanged()
+    {
+        Snapshot();
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Snapshot()
+    {
+        local_models = ModelCache.LocalModels.ToList();
+        running_models = ModelCache.RunningModels.ToList();
+
+        if (SelectedModel is not null && !(models?.Any(x => x.Name == SelectedModel.Name) ?? false))
+            SelectedModel = null;
+    }
 
     private IEnumerable<OllamaImportModel> FilteredModels =>
         string.IsNullOrWhiteSpace(search)
@@ -155,36 +183,16 @@ else
                     (m.Name?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false) ||
                     (m.Description?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
 
-    IOllamaApiClient Client => ClientState.OllamaClient;
-
-    private async Task LoadModelsAsync(CancellationToken token)
-    {
-        var list = await Client.ListLocalModelsAsync(token);
-        var runningList = await Client.ListRunningModelsAsync(token);
-
-        running_models = runningList.ToList();
-        local_models = list.ToList();
-
-        // keep SelectedModel if still present, otherwise clear
-        if (SelectedModel is not null && !(models?.Any(x => x.Name == SelectedModel.Name) ?? false))
-            SelectedModel = null;
-    }
     private static readonly Regex ModelTagRx =
-    new(@"([\w\-.]+:[\w\-.]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        new(@"([\w\-.]+:[\w\-.]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     private bool VersionInstalled(string markup, OllamaImportModel? selected)
     {
         if (selected is null) return false;
-
-        // Local names for this family (e.g., "llama3:8b", "phi3:3.8b-q4", etc.)
         var localNames = MatchingLocal(selected).Select(l => l.Name).ToList();
         if (localNames.Count == 0) return false;
 
-        foreach (var ln in localNames)
-        {
-            if (string.Equals(ln, markup, StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
+        if (localNames.Any(n => string.Equals(n, markup, StringComparison.OrdinalIgnoreCase))) return true;
 
         var m = ModelTagRx.Match(markup);
         if (m.Success)
@@ -192,109 +200,22 @@ else
             var token = m.Groups[1].Value;
             return localNames.Any(n => string.Equals(n, token, StringComparison.OrdinalIgnoreCase));
         }
-
         return false;
-    }
-
-
-    private readonly CancellationTokenSource cts = new();
-
-    public async Task RefreshAsync()
-    {
-        loading = true;
-        _loadError = null;
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
-            await LoadModelsAsync(linked.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            _loadError = "Model list request timed out.";
-        }
-        catch (Exception ex)
-        {
-            _loadError = $"Couldn't fetch models: {ex.Message}";
-        }
-        finally
-        {
-            loading = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-    private ConfigDropdown configDD;
-    private async Task HandleModelAssistantSelected(AssistantConfig model)
-    {
-        await RefreshAsync();
-    }
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-
-        loading = true;
-        await InvokeAsync(StateHasChanged);
-
-        try
-        {
-            var ollama = Health.Get(HealthDomain.Ollama);
-            if (ollama.Level != HealthLevel.Healthy)
-            {
-                _loadError = ollama.Error ?? "Ollama server not reachable.";
-                return;
-            }
-
-            using var shortCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
-            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cts.Token, shortCts.Token);
-            await LoadModelsAsync(linked.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            _loadError = "Model list request timed out.";
-        }
-        catch (Exception ex)
-        {
-            _loadError = $"Couldn't fetch models: {ex.Message}";
-        }
-        finally
-        {
-            loading = false;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    protected override async Task OnInitializedAsync()
-    {
-        models = await ModelService.GetModelsAsync();
-        if (models?.Count > 0)
-            SelectedModel = models[0]; // optional: auto-select first
-    }
-
-    private static string NA(string? v) => string.IsNullOrWhiteSpace(v) ? "—" : v;
-
-    private void SelectModel(OllamaImportModel m)
-    {
-        SelectedModel = m;
-        StateHasChanged();
     }
 
     private IEnumerable<Model> MatchingLocal(OllamaImportModel m)
     {
         if (local_models is null || m is null) yield break;
-
-        // Simple heuristic: match local model names that start with the downloadable name (before any colon)
         var baseName = (m.Name ?? "").Trim();
         if (string.IsNullOrWhiteSpace(baseName)) yield break;
-
         foreach (var lm in local_models)
-        {
             if (lm.Name.StartsWith(baseName, StringComparison.OrdinalIgnoreCase))
                 yield return lm;
-        }
     }
-
+    private async Task HandleModelAssistantSelected(AssistantConfig model)
+    {
+        await ModelCache.RefreshNowAsync();
+    }
     private bool IsInstalled(OllamaImportModel m) => MatchingLocal(m).Any();
 
     private bool IsRunning(OllamaImportModel m)
@@ -304,6 +225,12 @@ else
         return running_models?.Any(r => r.Name?.StartsWith(baseName, StringComparison.OrdinalIgnoreCase) == true) == true;
     }
 
+    private void SelectModel(OllamaImportModel m)
+    {
+        SelectedModel = m;
+        StateHasChanged();
+    }
+
     private string FormatBytes(long bytes)
     {
         if (bytes >= 1_000_000_000) return $"{bytes / 1_000_000_000.0:F2} GB";
@@ -311,6 +238,4 @@ else
         if (bytes >= 1_000) return $"{bytes / 1_000.0:F2} KB";
         return $"{bytes} B";
     }
-    //older
-
 }

@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
 
@@ -20,6 +19,8 @@ namespace AssistantEngine.UI.Services.Implementation.Config
         {
             var appData = store.AppDataDirectory;
             var destDir = Path.Combine(appData, "Models");
+
+            //WipeDirectory(destDir);
             Directory.CreateDirectory(destDir);
      
             var asm = typeof(ConfigSeeder).Assembly;
@@ -30,7 +31,7 @@ namespace AssistantEngine.UI.Services.Implementation.Config
                             n.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            var overwriteDuplicates = false; // true = overwrite same-Id + same-name files; false = current behavior
+            var overwriteDuplicates = true; // true = overwrite same-Id + same-name files; false = current behavior
 
             foreach (var res in embeddedModels)
             {
@@ -41,7 +42,6 @@ namespace AssistantEngine.UI.Services.Implementation.Config
                 using var ms = new MemoryStream();
                 s.CopyTo(ms);
                 ms.Position = 0;
-
 
                 // If a file with same model Id already exists, skip writing to avoid duplicates
                 string? newId = null;

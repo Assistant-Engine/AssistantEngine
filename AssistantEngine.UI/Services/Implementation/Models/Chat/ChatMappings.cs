@@ -19,6 +19,7 @@ namespace AssistantEngine.UI.Services.Implementation.Models.Chat
         public static ChatMessage ToModel(this ChatMessageDto d)
         {
             var m = new ChatMessage(d.Role, d.Text);
+            
             m.MessageId = d.MessageId;
             m.AuthorName = d.AuthorName;
             m.AdditionalProperties = d.AdditionalProperties;
