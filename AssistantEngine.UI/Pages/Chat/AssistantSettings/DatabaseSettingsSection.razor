@@ -18,7 +18,7 @@
                 </dt>
                 <dd class="penalty1-op-inner">
                     <InputText @bind-Value="database.Id" class="form-control"
-                               @oninput="(_) => editedDatabases.Add(database.Id)" />
+                               @oninput="(_) => { editedDatabases.Add(database.Id); MarkDirty?.Invoke(); }" />
                 </dd>
 
                 <dt>
@@ -28,19 +28,19 @@
                 </dt>
                 <dd class="tokencount-op-inner">
                     <InputTextArea @bind-Value="database.DatabaseConsiderations" class="form-control mot2"
-                                   @oninput="(_) => editedDatabases.Add(database.Id)" />
+                                   @oninput="(_) => { editedDatabases.Add(database.Id); MarkDirty?.Invoke(); }" />
                 </dd>
 
                 <dt>Connection String</dt>
                 <dd class="tokencount-op-inner">
                     <InputTextArea @bind-Value="database.ConnectionString" class="form-control mot2"
-                                   @oninput="(_) => editedDatabases.Add(database.Id)" />
+                                   @oninput="(_) => { editedDatabases.Add(database.Id); MarkDirty?.Invoke(); }" />
                 </dd>
 
                 <dt class="ext-dt">Dialect:</dt>
                 <dd class="penalty1-op-inner">
                     <InputText @bind-Value="database.Dialect" class="form-control"
-                               @oninput="(_) => editedDatabases.Add(database.Id)" />
+                               @oninput="(_) => { editedDatabases.Add(database.Id); MarkDirty?.Invoke(); }" />
                 </dd>
 
                 <div class="describe-db">
@@ -50,7 +50,7 @@
                     </dt>
                     <dd class="subexplorer">
                         <InputCheckbox @bind-Value="database.DescribeDatabaseWithModel" class="form-check-input ms-1"
-                                       @onchange="(_) => editedDatabases.Add(database.Id)" />
+                                       @onchange="(_) => { editedDatabases.Add(database.Id); MarkDirty?.Invoke(); }" />
                     </dd>
                 </div>
 

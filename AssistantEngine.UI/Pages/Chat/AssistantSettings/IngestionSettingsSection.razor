@@ -10,7 +10,7 @@
             <div class="ingestion-folder">
                 <dt class="path-dt">Path: <button class="btn btn-sm btn-danger mt-2" @onclick="@(() => RemoveFolder(folder))"><i class="fi-br-cross"></i></button></dt>
                 <dd class="penalty1-op-inner">
-                    <InputText @bind-Value="folder.Path" class="form-control" />
+                    <InputText @bind-Value="folder.Path" class="form-control" @oninput="(_) => MarkDirty?.Invoke()" />
                 </dd>
 
 
@@ -22,13 +22,14 @@
                            class="form-control"
                            placeholder="All supported types"
                            value="@GetExtensionsString(folder)"
+                           @oninput="(_) => MarkDirty?.Invoke()"
                            @onchange="@((ChangeEventArgs e) => SetExtensions(folder, e.Value?.ToString()))" />
 
                 </dd>
                 <div class="explore-sub-cont">
                     <dt class="explore-dt">Explore Subfolders:</dt>
                     <dd class="subexplorer">
-                        <InputCheckbox @bind-Value="folder.ExploreSubFolders" class="form-check-input ms-1" />
+                        <InputCheckbox @bind-Value="folder.ExploreSubFolders" @oninput="(_) => MarkDirty?.Invoke()" class="form-check-input ms-1" />
                     </dd>
                 </div>
 
@@ -79,6 +80,8 @@
                 .Select(e => e.Trim())
                 .Where(e => !string.IsNullOrWhiteSpace(e))
                 .ToList();
+
         }
+        MarkDirty?.Invoke();
     }
 }

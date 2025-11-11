@@ -1,10 +1,11 @@
 ﻿using AssistantEngine.UI.Services.Models.Ingestion;
+using AssistantEngine.UI.Services.Types;
 
 namespace AssistantEngine.UI.Services;
 
 public interface IIngestionSource
 {
-    public event Action<string>? StatusMessage;
+    public event Action<string>? OnProgressMessage;
     string SourceId { get; }
 
     Task<IEnumerable<IngestedDocument>> GetNewOrModifiedDocumentsAsync(IReadOnlyList<IngestedDocument> existingDocuments);

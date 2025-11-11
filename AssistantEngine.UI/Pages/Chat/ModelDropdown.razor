@@ -75,7 +75,6 @@
     private List<RunningModel> running_models = new();
     private bool loading;
 
-    IOllamaApiClient Client => ClientState.OllamaClient;
     private string dropdownId => "current-model";
 
     private async Task OnBrowseModelsClick() => await OpenModels.InvokeAsync();

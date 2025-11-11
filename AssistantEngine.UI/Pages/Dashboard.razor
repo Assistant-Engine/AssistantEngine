@@ -1,32 +1,35 @@
 ﻿@page "/"
+@using AssistantEngine.Factories
+@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Types
+@using System.ComponentModel
 @inject IJSRuntime JSRuntime
 @inject IAppHealthService Health
 @inject ChatClientState State
 @inject IModelCache ModelCache
-@using System.ComponentModel
-@using AssistantEngine.Factories
-@using AssistantEngine.UI.Services
+
+
 <PageTitle>Assistant Engine - Chat</PageTitle>
+
 <LeftSidebar ActiveTab="@current" OnTabChanged="tab => current = tab" />
 
 <div class="content">
     @switch (current)
     {
-        case SidebarTab.Chats: 
-        <AssistantEngine.UI.Pages.Chat.Chat></AssistantEngine.UI.Pages.Chat.Chat>
+        case SidebarTab.Chats:
+            <AssistantEngine.UI.Pages.Chat.Chat />
             break;
         case SidebarTab.Evaluations:
-
-            <AssistantEngine.UI.Pages.EvaluationsPanel> </AssistantEngine.UI.Pages.EvaluationsPanel>
+            <AssistantEngine.UI.Pages.EvaluationsPanel />
             break;
-       case SidebarTab.Models:            
-       <AssistantEngine.UI.Pages.InstalledModels> </AssistantEngine.UI.Pages.InstalledModels>
-       break;
+        case SidebarTab.Models:
+            <AssistantEngine.UI.Pages.InstalledModels />
+            break;
         case SidebarTab.Install:
-            <AssistantEngine.UI.Pages.OllamaInstall> </AssistantEngine.UI.Pages.OllamaInstall>
+            <AssistantEngine.UI.Pages.OllamaInstall />
             break;
         case SidebarTab.Settings:
-            <AssistantEngine.UI.Pages.GlobalSettings> </AssistantEngine.UI.Pages.GlobalSettings>
+            <AssistantEngine.UI.Pages.GlobalSettings />
             break;
     }
     <ModalPopup />
@@ -37,133 +40,28 @@
     private EventHandler<AppHealthSnapshot>? _healthHandler;
     private SidebarTab current = SidebarTab.Chats;
     private DotNetObjectReference<Dashboard>? _ref;
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            State.OnStatusMessage -= OnStatusMessageHandler;
-            State.OnStatusMessage += OnStatusMessageHandler;
-            _ref ??= DotNetObjectReference.Create(this);
-            //   ClientState.OnChatLoaderMessage += async (_, msg) =>
-            //{
-            //   if (!string.IsNullOrWhiteSpace(msg))
-            //           await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", msg, "Tools");
-            //  };
-            // HEALTH → initial toast
-            _health = Health.Snapshot;
-
-            var ollama = _health[HealthDomain.Ollama];
-            if (ollama.Level == HealthLevel.Unhealthy)
-                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", ollama.Error ?? "Ollama error", "Ollama");
-            else if (ollama.Level == HealthLevel.Healthy)
-                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"Connected to Ollama ({ollama.Meta?["ServerUrl"]})", "Ollama");
-
-            _healthHandler = async (_, snap) =>
-            {
-                _health = snap;
-                var o = snap[HealthDomain.Ollama];
-                if (o.Level == HealthLevel.Unhealthy)
-                    await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", o.Error ?? "Ollama error", "Ollama");
-                else if (o.Level == HealthLevel.Healthy)
-                    await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"Connected to Ollama ({o.Meta?["ServerUrl"]})", "Ollama");
-
-                // Optional: show vector-store or database issues similarly if you want.
-                await InvokeAsync(StateHasChanged);
-            };
-            Health.Changed += _healthHandler;
-
-
-            await JSRuntime.InvokeVoidAsync("GLOBAL.SetOllamaRef", _ref);
-            await ModelCache.EnsureStartedAsync();
-        }
-    }
-    // add once in the component/class
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte>
-        _pulling = new(System.StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource cts = new();
 
-
-    private void OnStatusMessageHandler(string msg)
+    // 1) Init _health before first use
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _ = ShowToastAsync(msg); // fire-and-forget
+        if (!firstRender) return;
+
+        State.OnStatusMessage -= HandleStatus;
+        State.OnStatusMessage += HandleStatus;
+
+        _health = Health.Snapshot;                 // <-- add this
+        ShowOllamaHealthToast(_health);            // now safe
+
+        _healthHandler = OnHealthChanged;
+        Health.Changed += _healthHandler;
+
+        _ref ??= DotNetObjectReference.Create(this);
+        await JSRuntime.InvokeVoidAsync("GLOBAL.SetOllamaRef", _ref);
+        await ModelCache.EnsureStartedAsync();
     }
 
-    private async Task ShowToastAsync(string msg)
-    {
-        try
-        {
-            if (msg.StartsWith("TOAST|", StringComparison.Ordinal))
-            {
-                var parts = msg.Split('|', 4);
-                var level = parts.Length > 1 ? parts[1] : "info";      // info|success|warning|error
-                var title = parts.Length > 2 ? parts[2] : "Notification";
-                var body = parts.Length > 3 ? parts[3] : "";
 
-                await JSRuntime.InvokeVoidAsync($"GLOBAL.toastrInterop.{level}", body, title);
-            }
-            else
-            {
-                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", msg, "Info");
-            }
-        }
-        catch (Exception ex) { await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", ex.Message, "Error"); }
-    }
-    private async Task<bool> IsInstalledAsync(string model, CancellationToken ct = default)
-    {
-        // normalize ":latest"
-        if (!model.Contains(':')) model += ":latest";
-        var local = await State.OllamaClient.ListLocalModelsAsync(ct);
-        return local.Any(x => string.Equals(x.Name, model, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private async Task PullModelAndNotifyAsync(string model, CancellationToken ct)
-    {
-        if (await IsInstalledAsync(model, ct))
-        {
-            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"{model} already installed", "Ollama");
-            return;
-        }
-        if (!_pulling.TryAdd(model, 0))
-        {
-            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", $"{model} is already downloading", "Ollama");
-            return;
-        }
-
-        try
-        {
-
-
-            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.info", $"Starting download: {model}", "Ollama");
-
-            var req = new OllamaSharp.Models.PullModelRequest { Model = model };
-            await foreach (var evt in State.OllamaClient.PullModelAsync(req).WithCancellation(ct).ConfigureAwait(false))
-            {
-                // no per-tick JS calls; let the loop stream quietly
-                // rely on final success + post-check
-            }
-
-            // Final verification is the source of truth
-            if (await IsInstalledAsync(model, ct))
-            {
-                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.success", $"Download complete: {model}", "Ollama");
-            }
-            else
-            {
-                await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", $"Download finished but not installed: {model}", "Ollama");
-            }
-        }
-        catch (OperationCanceledException) { /* optional toast */ }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", $"Failed to download {model}: {ex.Message}", "Ollama");
-        }
-        finally
-        {
-            _pulling.TryRemove(model, out _);
-           // await header!.RefreshModelsAsync();
-            //  await InvokeAsync(StateHasChanged); did not helpop
-        }
-    }
     protected override async Task OnInitializedAsync()
     {
         await State.ChangeModelAsync();
@@ -171,30 +69,90 @@
         await base.OnInitializedAsync();
     }
 
-    [JSInvokable]
-    public Task PullModelFromLink(string model)
+    private void HandleStatus(StatusMessage s)
     {
-
-        // don’t block the UI thread; run on background
-        _ = Task.Run(() => PullModelAndNotifyAsync(model, cts.Token));
-        return Task.CompletedTask;
+        _ = ShowToastAsync(s); // fire-and-forget
     }
+
+    private void OnHealthChanged(object? sender, AppHealthSnapshot snap)
+    {
+        _health = snap;
+        ShowOllamaHealthToast(snap);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ShowToastAsync(StatusMessage s)
+    {
+        try
+        {
+            var method = s.Level switch
+            {
+                StatusLevel.Success => "success",
+                StatusLevel.Warning => "warning",
+                StatusLevel.Error => "error",
+                _ => "info"
+            };
+            var title = string.IsNullOrWhiteSpace(s.Title)
+                ? s.Level switch
+                {
+                    StatusLevel.Success => "Success",
+                    StatusLevel.Warning => "Warning",
+                    StatusLevel.Error => "Error",
+                    _ => "Info"
+                }
+                : s.Title;
+
+       
+            if (s.Message.StartsWith("TOAST|", StringComparison.Ordinal))
+            {
+                var parts = s.Message.Split('|', 4);
+                var body = parts.Length > 3 ? parts[3] : "";
+                var ovr = parts.Length > 2 && !string.IsNullOrWhiteSpace(parts[2]) ? parts[2] : title;
+                await JSRuntime.InvokeVoidAsync($"GLOBAL.toastrInterop.{method}", body, ovr);
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync($"GLOBAL.toastrInterop.{method}", s.Message, title);
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", ex.Message, "Error");
+        }
+    }
+
+    private void ShowOllamaHealthToast(AppHealthSnapshot? snap)
+    {
+        if (snap is null) return;                  // <-- add this
+        var o = snap[HealthDomain.Ollama];         // indexer is safe if snap != null
+        if (o.Level == HealthLevel.Unhealthy)
+        {
+            _ = ShowToastAsync(new StatusMessage(
+                o.Error ?? "Ollama error",
+                StatusLevel.Error,
+                "Ollama",
+                "Health"));
+        }
+        else if (o.Level == HealthLevel.Healthy)
+        {
+            var url = o.Meta is not null && o.Meta.TryGetValue("ServerUrl", out var u) ? u : null;
+            _ = ShowToastAsync(new StatusMessage(
+                url is null ? "Connected to Ollama" : $"Connected to Ollama ({url})",
+                StatusLevel.Success,
+                "Ollama",
+                "Health"));
+        }
+    }
+
+
     public void Dispose()
     {
-        // unsubscribe global health listener
         if (_healthHandler is not null)
             Health.Changed -= _healthHandler;
 
-        // unsubscribe global status → toast bridge
-        State.OnStatusMessage -= OnStatusMessageHandler;
-
-        // if you created a DotNetObjectReference at parent level for GLOBAL.SetOllamaRef
+        State.OnStatusMessage -= HandleStatus;
         _ref?.Dispose();
-
-        // cancel any shared CTS used for PullModelAndNotifyAsync
         cts.Cancel();
         cts.Dispose();
     }
-
-
 }

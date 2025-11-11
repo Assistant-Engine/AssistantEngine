@@ -4,13 +4,17 @@ using AssistantEngine.Services.Implementation.Tools;
 using AssistantEngine.UI.Pages.Chat;
 using AssistantEngine.UI.Services;
 using AssistantEngine.UI.Services.Extensions;
+using AssistantEngine.UI.Services.Extensions;
 using AssistantEngine.UI.Services.Implementation.Config;
 using AssistantEngine.UI.Services.Implementation.Database;
 using AssistantEngine.UI.Services.Implementation.Factories;
 using AssistantEngine.UI.Services.Implementation.Ingestion;
 using AssistantEngine.UI.Services.Implementation.MCP;
+using AssistantEngine.UI.Services.Implementation.Models.Chat;
 using AssistantEngine.UI.Services.Models;
 using AssistantEngine.UI.Services.Models.Ingestion;
+using AssistantEngine.UI.Services.Types;
+using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -18,6 +22,7 @@ using Microsoft.Extensions.VectorData;
 using OllamaSharp;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq.Expressions;
 using System.Net.NetworkInformation;
@@ -31,15 +36,11 @@ namespace AssistantEngine.Factories
         public string? Message { get; set; }
     }
 
-    // ChatClientState.cs
+
     public class ChatClientState : IDisposable
     {
-        public void Dispose()
-        {
-            _notifier.OnStatusMessage -= StatusMessage;
-            _dbRegistry.DatabaseAdded -= OnDatabaseAddedAsync;
-            _dbRegistry.DatabaseRemoved -= OnDatabaseRemoved;
-        }
+        public enum RunEngine { ChatClient, Agent }
+        public RunEngine Engine { get; set; } = RunEngine.ChatClient;
 
         private readonly IAppConfigStore _config;
         private readonly IDatabaseRegistry _dbRegistry;
@@ -48,17 +49,11 @@ namespace AssistantEngine.Factories
         readonly ChatClientFactory _factory;
         readonly OllamaClientFactory _ollamaFactory;
         readonly IAssistantConfigStore _allConfigs;
-
-        //readonly IOptionsMonitor<ChatOptions> _opts;
-        // readonly IEnumerable<ITool> _tools;
         readonly IServiceProvider _services;
-        // readonly IWebHostEnvironment _env;
         private readonly IAppHealthService _health;
+        private readonly IChatRepository _repo;
+        private readonly AIAgentFactory _agentFactory;
         public ChatOptions ChatOptions { get; private set; }
-        //  Dictionary<string, IDatabase> _databaseDict;
-
-        //so next what does this neeed to do? it needs to embed a description.
-        //we can inject the model.
 
         public ChatClientState(
             DataIngestor dataIngestor,
@@ -70,7 +65,9 @@ namespace AssistantEngine.Factories
             IAssistantConfigStore configs,
             IOptionsMonitor<ChatOptions> opts,
             IToolStatusNotifier notifier,
-             IAppHealthService health)
+             IAppHealthService health,
+                 IChatRepository repo,
+                   AIAgentFactory agentFactory)
         {
             _health = health;
             _dbRegistry = dbRegistry;
@@ -81,8 +78,9 @@ namespace AssistantEngine.Factories
             _allConfigs = configs;
             _ollamaFactory = ollamaFactory;
             _notifier = notifier;
+            _repo = repo;
+            _agentFactory = agentFactory;
 
-            // ✅ ensure idempotent subscriptions
             _notifier.OnStatusMessage -= StatusMessage;
             _notifier.OnStatusMessage += StatusMessage;
 
@@ -93,7 +91,47 @@ namespace AssistantEngine.Factories
             _dbRegistry.DatabaseRemoved += OnDatabaseRemoved;
         }
 
-        // move lambdas into methods so you can unsubscribe cleanly
+
+        private CancellationTokenSource? _runCts;
+        private ChatMessage? _inflight;
+        private DateTime _lastFlush = DateTime.MinValue;
+        private static readonly TimeSpan FlushThrottle = TimeSpan.FromMilliseconds(80);
+        private static readonly TimeSpan UiInterval = TimeSpan.FromMilliseconds(50); // render cadence
+        private DateTime _lastUi = DateTime.MinValue;
+        private static readonly TimeSpan UiRenderPause = TimeSpan.FromMilliseconds(2);
+        public event Action? OnStateChanged;
+        public ChatSession Session { get; private set; } = new();
+        public List<ChatMessage> Messages { get; } = new();
+        public bool IsLoading { get; private set; }
+        public bool IsStreaming { get; private set; }
+        public ChatMessage? InProgress => _inflight;
+        public event Action<bool, string?>? OnLoaderMessage;
+        public event Action<bool, string?>? OnChatLoaderMessage;
+        public event Action<string>? OnStatusEvent;
+
+        public ChatResponse? ChatResponse { get; private set; }
+        readonly ConcurrentDictionary<string, Task> _ingestionTasks = new();
+        public IChatClient Client { get; set; }
+        public IOllamaApiClient OllamaClient { get; private set; }
+
+        public AIAgent AiAgent { get; private set; }
+        public AssistantConfig Config { get; private set; }
+        public bool IngestionFinished { get; private set; } = false;
+        public StatusLevel DefaultStatusSeverity { get; set; } = StatusLevel.Information;
+        private void RaiseStateChanged() => OnStateChanged?.Invoke();
+
+        private async Task RaiseStateChangedThrottledAsync(CancellationToken ct = default)
+        {
+            var now = DateTime.UtcNow;
+
+            if ((now - _lastUi) >= UiInterval)
+            {
+                _lastUi = now;
+                OnStateChanged?.Invoke();
+                await Task.Delay(UiRenderPause, ct); 
+            }
+        }
+
         private async void OnDatabaseAddedAsync(IDatabase db)
         {
             await IngestNewDatabaseAsync(db);
@@ -101,8 +139,7 @@ namespace AssistantEngine.Factories
 
         private void OnDatabaseRemoved(string id)
         {
-            StatusMessage($"Database {id} removed – its chunks will no longer be available.");
-            // optionally: purge from vector store here
+            StatusMessage($"Database {id} removed – its chunks will no longer be available.", StatusLevel.Information);
         }
         private async Task IngestNewDatabaseAsync(IDatabase db)
         {
@@ -110,94 +147,450 @@ namespace AssistantEngine.Factories
             {
                 var descriptorClient = _factory(Config.DescriptorModel.ModelId);
                 var sqlSource = new DatabaseIngestionSource(db, _factory, Config);
-                sqlSource.StatusMessage += LoaderMessage;
-
+                sqlSource.OnProgressMessage += LoaderMessage;
                 await _dataIngestor.IngestDataAsync(
                     sqlSource,
                     "sql-table-chunks",
                     "data-echoed-documents"
                 );
 
-                StatusMessage($"Database {db.Configuration.Id} ingested.");
+                StatusMessage($"Database {db.Configuration.Id} ingested.", StatusLevel.Information);
             }
             catch (Exception ex)
             {
-                StatusMessage($"Error ingesting {db.Configuration.Id}: {ex.Message}");
+                StatusMessage($"Error ingesting {db.Configuration.Id}: {ex.Message}", StatusLevel.Information);
             }
         }
 
 
-        public void StatusMessage(string msg) => OnStatusMessage?.Invoke(msg);
+        public void StatusMessage(StatusMessage s) => OnStatusMessage?.Invoke(s);
+
+        public void StatusMessage(StatusMessage msg, StatusLevel minSeverity) // filtered
+        {
+            if (msg.Level >= minSeverity) OnStatusMessage?.Invoke(msg);
+        }
+        public void StatusMessage(string msg, StatusLevel level = StatusLevel.Information,
+                                  string? title = null, string? source = null, StatusLevel minSeverity = StatusLevel.Information)
+            => StatusMessage(new StatusMessage(msg, level, title, source), minSeverity);
+
+        public event Action<StatusMessage>? OnStatusMessage;
+
+        
         private void LoaderMessage(string msg) => OnLoaderMessage?.Invoke(true,msg);
         private void ChatLoaderMessage(string msg) => OnChatLoaderMessage?.Invoke(true,msg);
-        public event Action<string>? OnStatusMessage;
-        public event Action<bool, string?>? OnLoaderMessage;
-        public event Action<bool, string?>? OnChatLoaderMessage;
-        public event Action<string>? OnStatusEvent; //INGESTING
-        readonly ConcurrentDictionary<string, Task> _ingestionTasks
-    = new();
-        public IChatClient Client { get;  set; }
-        public IOllamaApiClient OllamaClient { get; private set; }
-        public AssistantConfig Config { get; private set; }
 
-        public bool IngestionFinished { get; private set; } = false;
+   
 
-        //this refers to ones like echo ed
-        public void ChangeModel(string id)
+        public async Task LoadSessionAsync(ChatSession? s = null, CancellationToken ct = default)
+        {
+            Session = s ?? new ChatSession();
+            Messages.Clear();
+
+            if (Session.Messages?.Count > 0)
+                Messages.AddRange(Session.Messages);
+            else
+                Messages.Add(new(ChatRole.System, Config.SystemPrompt));
+
+            RaiseStateChanged();
+            await Task.CompletedTask;
+        }
+
+        public async Task ResetConversationAsync()
+        {
+            _runCts?.Cancel();
+            Session = new ChatSession();
+            Messages.Clear();
+            Messages.Add(new(ChatRole.System, Config.SystemPrompt));
+            await _repo.SaveAsync(Session);
+            RaiseStateChanged();
+        }
+
+        private List<ChatMessage> Filter(List<ChatMessage> src)
+        {
+            var list = src.ToList();
+            if (!Config.PersistThoughtHistory)
+                list.RemoveThinkMessages();
+            return list;
+        }
+
+        public async Task EnqueueAndRunAsync(ChatMessage userMsg)
+        {
+            var o = _health.Get(HealthDomain.Ollama);
+            if (o.Level != HealthLevel.Healthy)
+            {
+                StatusMessage(o.Error ?? "Ollama not reachable.", StatusLevel.Error);
+                return;
+            }
+
+            _runCts?.Cancel();
+            Messages.Add(userMsg);
+            IsLoading = true;
+           // RaiseStateChanged();
+
+            await StartRunAsync(Filter(Messages));
+        }
+        public async Task EditAndRegenerateAsync(string messageId, string newText)
+        {
+            _runCts?.Cancel();
+
+            var idx = Messages.FindIndex(m => m.MessageId == messageId);
+            if (idx < 0) return;
+
+            Messages[idx] = new(ChatRole.User, newText);
+            if (idx < Messages.Count - 1)
+                Messages.RemoveRange(idx + 1, Messages.Count - (idx + 1));
+
+            IsLoading = true;
+            RaiseStateChanged();
+
+            await StartRunAsync(Filter(Messages));
+        }
+        public void CancelRun()
+        {
+            _runCts?.Cancel();
+        }
+
+  
+        private async Task FlushAsync(bool force = false, CancellationToken ct = default)
+        {
+            var now = DateTime.UtcNow;
+            if (!force && (now - _lastFlush) < FlushThrottle) return;
+
+            Session.Messages = Messages;
+            await _repo.SaveAsync(Session, ct);
+            _lastFlush = now;
+        }
+
+        public async Task StartAgentRunAsync()
+        {
+            _runCts?.Dispose();
+            _runCts = new CancellationTokenSource();
+            var token = _runCts.Token;
+
+            ChatResponse = null;
+            IsStreaming = true;
+            IsLoading = true;
+            _inflight = null;
+            RaiseStateChanged();
+            await Task.Yield();
+            _ = FlushAsync();
+
+            var thread = AiAgent.GetNewThread();
+
+            _inflight = new ChatMessage
+            {
+                MessageId = Guid.NewGuid().ToString(),
+                Role = ChatRole.Assistant,
+                CreatedAt = DateTime.UtcNow,
+                AdditionalProperties = new()
+            };
+
+            try
+            {
+                var start = DateTime.UtcNow;
+                DateTime? firstToken = null;
+
+                var updatesBuffer = new List<Microsoft.Agents.AI.AgentRunResponseUpdate>();
+                var mergedAdditional = new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
+
+                await foreach (var update in AiAgent.RunStreamingAsync(thread, cancellationToken: token).ConfigureAwait(false))
+                {
+                    if (update == null) continue;
+
+                    updatesBuffer.Add(update);
+
+                    if (update.AdditionalProperties != null)
+                        foreach (var kv in update.AdditionalProperties)
+                            mergedAdditional[kv.Key] = kv.Value;
+
+                    foreach (var c in update.Contents ?? [])
+                    {
+                        if (!firstToken.HasValue)
+                        {
+                            firstToken = DateTime.UtcNow;
+                            _inflight.AdditionalProperties["StartedThinkingAt"] = DateTime.UtcNow;
+                        }
+
+                        var last = _inflight.Contents.LastOrDefault();
+
+                        if (c is TextReasoningContent r && last is TextReasoningContent lr)
+                        {
+                            lr.Text += r.Text;
+                            MergeProps(lr, r);
+                        }
+                        else if (c is TextContent t && last is TextContent lt)
+                        {
+                            if (!_inflight.AdditionalProperties.ContainsKey("FinishedThinkingAt"))
+                                _inflight.AdditionalProperties["FinishedThinkingAt"] = DateTime.UtcNow;
+
+                            lt.Text += t.Text;
+                            MergeProps(lt, t);
+                        }
+                        else
+                        {
+                            if (last?.AdditionalProperties != null)
+                                last.AdditionalProperties["FinishedAt"] = DateTime.UtcNow;
+
+                            c.AdditionalProperties ??= new();
+                            c.AdditionalProperties["StartedAt"] = DateTime.UtcNow;
+                            _inflight.Contents.Add(c);
+                        }
+                    }
+
+                    await RaiseStateChangedThrottledAsync(token);
+                }
+
+                async IAsyncEnumerable<AgentRunResponseUpdate> Replay()
+                { foreach (var u in updatesBuffer) yield return u; }
+
+                var agentRunResponse = await Replay().ToAgentRunResponseAsync(token);
+                agentRunResponse.AdditionalProperties ??= new();
+                foreach (var kv in mergedAdditional)
+                    agentRunResponse.AdditionalProperties[kv.Key] = kv.Value;
+
+                var finish = DateTime.UtcNow;
+                var totalAll = finish - start;
+                if (!agentRunResponse.AdditionalProperties.ContainsKey("total_duration_all"))
+                    agentRunResponse.AdditionalProperties["total_duration_all"] = totalAll;
+
+                var load = firstToken.HasValue ? (firstToken.Value - start) : totalAll;
+                if (!agentRunResponse.AdditionalProperties.ContainsKey("load_duration"))
+                    agentRunResponse.AdditionalProperties["load_duration"] = load;
+
+                var eval = firstToken.HasValue ? (finish - firstToken.Value) : TimeSpan.Zero;
+                if (!agentRunResponse.AdditionalProperties.ContainsKey("eval_duration"))
+                    agentRunResponse.AdditionalProperties["eval_duration"] = eval;
+                if (!agentRunResponse.AdditionalProperties.ContainsKey("total_duration"))
+                    agentRunResponse.AdditionalProperties["total_duration"] = eval;
+                if (!agentRunResponse.AdditionalProperties.ContainsKey("tool_duration"))
+                    agentRunResponse.AdditionalProperties["tool_duration"] = TimeSpan.Zero;
+
+                Messages.Add(_inflight);
+                Session.Messages = Messages;
+                
+                _inflight = null;
+
+                ChatResponse = agentRunResponse.AsChatResponse();
+                IsStreaming = false;
+                IsLoading = false;
+
+                await FlushAsync(force: true);
+
+                if (Session.DefaultTitle())
+                    _ = SetTitleAsync();
+
+                RaiseStateChanged();
+            }
+            catch (OperationCanceledException)
+            {
+                IsStreaming = false;
+                IsLoading = false;
+                if (_inflight != null)
+                {
+                    Messages.Add(_inflight);
+                    _inflight = null;
+                    Session.Messages = Messages;
+                    await FlushAsync(force: true);
+                }
+                RaiseStateChanged();
+            }
+            catch (Exception ex)
+            {
+                IsStreaming = false;
+                IsLoading = false;
+                StatusMessage($"Agent streaming error: {ex.Message}", StatusLevel.Error);
+                RaiseStateChanged();
+            }
+        }
+
+        public async Task StartRunAsync(List<ChatMessage> filtered)
+        {
+            _runCts?.Dispose();
+            _runCts = new CancellationTokenSource();
+            var token = _runCts.Token;
+
+            ChatResponse = null;
+            IsStreaming = true;
+            IsLoading = true;
+            _inflight = null;
+            RaiseStateChanged();
+            await Task.Yield(); 
+            _ = FlushAsync();
+
+            _inflight = new ChatMessage
+            {
+                MessageId = Guid.NewGuid().ToString(),
+                Role = ChatRole.Assistant,
+                CreatedAt = DateTime.UtcNow,
+                AdditionalProperties = new()
+            };
+            try
+            {
+                var start = DateTime.UtcNow;
+                DateTime? firstToken = null;
+
+                var updatesBuffer = new List<ChatResponseUpdate>();
+                var mergedAdditional = new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
+
+                await foreach (var update in Client.GetStreamingResponseAsync(filtered, ChatOptions, token).ConfigureAwait(false))
+                {
+                    updatesBuffer.Add(update);
+                    if (update?.AdditionalProperties != null)
+                        foreach (var kv in update.AdditionalProperties)
+                            mergedAdditional[kv.Key] = kv.Value;
+
+                    foreach (var c in update?.Contents ?? [])
+                    {
+                        if (!firstToken.HasValue)
+                        {
+                            firstToken = DateTime.UtcNow;
+                            _inflight.AdditionalProperties["StartedThinkingAt"] = DateTime.UtcNow;
+                        }
+
+                        var last = _inflight.Contents.LastOrDefault();
+
+                        if (c is TextReasoningContent r && last is TextReasoningContent lr)
+                        {
+                            lr.Text += r.Text;
+                            MergeProps(lr, r);
+                        }
+                        else if (c is TextContent t && last is TextContent lt)
+                        {
+                            if (!_inflight.AdditionalProperties.ContainsKey("FinishedThinkingAt"))
+                                _inflight.AdditionalProperties["FinishedThinkingAt"] = DateTime.UtcNow;
+
+                            lt.Text += t.Text;
+                            MergeProps(lt, t);
+                        }
+                        else
+                        {
+                            if (last?.AdditionalProperties != null)
+                                last.AdditionalProperties["FinishedAt"] = DateTime.UtcNow;
+
+                            c.AdditionalProperties ??= new();
+                            c.AdditionalProperties["StartedAt"] = DateTime.UtcNow;
+                            _inflight.Contents.Add(c);
+                        }//could flush more here for persistence
+                    }
+                    // RequestRenderThrottled();
+
+                    // await RaiseStateChangedThrottledTimedAsync();
+                    await RaiseStateChangedThrottledAsync(token); 
+                }
+
+                async IAsyncEnumerable<ChatResponseUpdate> Replay()
+                { foreach (var u in updatesBuffer) yield return u; }
+
+                var chatResponse = await Replay().ToChatResponseAsync(token);
+                chatResponse.AdditionalProperties ??= new();
+                foreach (var kv in mergedAdditional)
+                    chatResponse.AdditionalProperties[kv.Key] = kv.Value;
+
+                var finish = DateTime.UtcNow;
+                var totalAll = finish - start;
+                if (!chatResponse.AdditionalProperties.ContainsKey("total_duration_all"))
+                    chatResponse.AdditionalProperties["total_duration_all"] = totalAll;
+
+                var load = firstToken.HasValue ? (firstToken.Value - start) : totalAll;
+                if (!chatResponse.AdditionalProperties.ContainsKey("load_duration"))
+                    chatResponse.AdditionalProperties["load_duration"] = load;
+
+                var eval = firstToken.HasValue ? (finish - firstToken.Value) : TimeSpan.Zero;
+                if (!chatResponse.AdditionalProperties.ContainsKey("eval_duration"))
+                    chatResponse.AdditionalProperties["eval_duration"] = eval;
+                if (!chatResponse.AdditionalProperties.ContainsKey("total_duration"))
+                    chatResponse.AdditionalProperties["total_duration"] = eval;
+                if (!chatResponse.AdditionalProperties.ContainsKey("tool_duration"))
+                    chatResponse.AdditionalProperties["tool_duration"] = TimeSpan.Zero;
+
+                Messages.Add(_inflight);
+                Session.Messages = Messages;
+                _inflight = null;
+
+                ChatResponse = chatResponse;
+                IsStreaming = false;
+                IsLoading = false;
+
+                await FlushAsync(force: true);
+
+                if (Session.DefaultTitle())
+                    _ = SetTitleAsync();
+
+                RaiseStateChanged();
+            }
+            catch (OperationCanceledException)
+            {
+                IsStreaming = false;
+                IsLoading = false;
+                if (_inflight != null)
+                {
+                    Messages.Add(_inflight);
+                    _inflight = null;
+                    Session.Messages = Messages;
+                    await FlushAsync(force: true);
+                }
+                RaiseStateChanged();
+            }
+            catch (Exception ex)
+            {
+                IsStreaming = false;
+                IsLoading = false;
+                StatusMessage($"Streaming error: {ex.Message}", StatusLevel.Error);
+                RaiseStateChanged();
+            }
+        }
+
+        private static void MergeProps(AIContent target, AIContent src)
+        {
+            if (src.AdditionalProperties is null) return;
+            target.AdditionalProperties ??= new();
+            foreach (var kv in src.AdditionalProperties) target.AdditionalProperties[kv.Key] = kv.Value;
+        }
+
+        private async Task SetTitleAsync()
         {
             try
             {
-
-                var tools = _services.GetServices<ITool>();
-            
-
-                Config = _allConfigs.GetById(id);
-                Client = _factory(Config.AssistantModel.ModelId);
-
-              
-                OllamaClient = _ollamaFactory(Config.AssistantModel.ModelId);
-                //ChatOptions = _opts.Get(Config.AssistantModelId);
-              
-                ChatOptions = Config.WithEnabledToolsAndMcp(_services);
-
-               
-
+                var miniOptions = Config.ModelOptions.First(m => m.Key == "MiniTask").Options;
+                var msgs = new List<ChatMessage>
+        {
+            new(ChatRole.System, "Output a maximum three word title for text you receive. Only ever output these words."),
+            new(ChatRole.User, Messages.First(x => x.Role == ChatRole.User).Text)
+        };
+                var resp = await _factory(Config.MiniTaskModel.ModelId).GetResponseAsync(msgs, miniOptions);
+                var title = AssistantEngine.Services.Extensions.ChatMessageExtensions.RemoveThinkTags(
+                    resp.Messages.First(x => x.Role == ChatRole.Assistant).Text);
+                Session.Title = title;
+                await _repo.SaveAsync(Session);
+                RaiseStateChanged();
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex.Message);
-                Console.WriteLine(ex.StackTrace);
-            }
-    
-            // ChatOptions.MergeFrom(Config.ChatOptions);
-
+            catch { /* non-fatal */ }
         }
 
 
-        public async Task ChangeModelAsync(string id = "")
+
+        public Task ChangeModelAsync(string id = "") =>ChangeModelAsync(id, DefaultStatusSeverity);
+        public async Task ChangeModelAsync(string id, StatusLevel minStatusSeverity)
         {
             if (false/*!_health.Snapshot.OllamaConnected || _health.Snapshot.OllamaError != null*/)
             {
-               // OnStatusMessage?.Invoke(_health.Snapshot.OllamaError ?? "Ollama not reachable. Model features disabled.");// either here DEFINITELY HERE
+               // OnStatusMessage?.
+               // (_health.Snapshot.OllamaError ?? "Ollama not reachable. Model features disabled.");// either here DEFINITELY HERE
                 //return;
             }
             if (string.IsNullOrEmpty(id))
             {
                 id = _allConfigs.GetAll().FirstOrDefault(c => c.Default)?.Id ?? _allConfigs.GetAll().First().Id;
             }
-            // pick config + clients
             Config = _allConfigs.GetAll().First(c => c.Id == id); // not set to an instance of an object once
             Client = _factory(Config.AssistantModel.ModelId);
             OllamaClient = _ollamaFactory(Config.AssistantModel.ModelId);
-
-            // 👇 hydrate databases for this config
+            AiAgent = _agentFactory(Config.AssistantModel.ModelId);
             foreach (var dbConfig in Config.Databases)
             {
                 _dbRegistry.Register(dbConfig);
             }
 
-
-            // hydrate MCP connectors for this config
             var mcp = _services.GetRequiredService<IMcpRegistry>();
             foreach (var conn in Config.McpConnectors)
             {
@@ -206,23 +599,25 @@ namespace AssistantEngine.Factories
                 {
                     if (t.Exception != null)
                     {
-                        StatusMessage($"MCP '{conn.Id}' failed: {t.Exception.InnerException?.Message}");
+                        StatusMessage($"MCP '{conn.Id}' failed: {t.Exception.InnerException?.Message}", StatusLevel.Error, minSeverity: minStatusSeverity);
                     }
                     else
                     {
-                        StatusMessage($"MCP '{conn.Id}' connected.");
+                        StatusMessage($"MCP '{conn.Id}' connected.", StatusLevel.Success,minSeverity:minStatusSeverity);
                     }
                 });
             }
 
-          //  OnStatusMessage?.Invoke($"Ingesting data for “{Config.Name}”…");
             var ingestTask = _ingestionTasks.GetOrAdd(id, _ => IngestDataAsync(Config));
-            await ingestTask;
-            IngestionFinished = true;
-            OnStatusMessage?.Invoke($"Model “{Config.Name}” ready");
+                await ingestTask;
+                IngestionFinished = true;
+            
+    
+            StatusMessage($"Model “{Config.Name}” ready", StatusLevel.Information, minSeverity: minStatusSeverity);
             ChatOptions = Config.WithEnabledToolsAndMcp(_services);
 
         }
+
         public void RefreshTools()
         {
             ChatOptions = Config.WithEnabledToolsAndMcp(_services);
@@ -237,27 +632,21 @@ namespace AssistantEngine.Factories
                 var db = _dbRegistry.Get(item.Id);
                 if (db == null)
                 {
-                    StatusMessage($"Database {item.Id} not found in registry.");
+                    StatusMessage($"Database {item.Id} not found in registry.", StatusLevel.Error);
                     continue;
                 }
 
                 try
                 {
-
-
                     var dbSource = new DatabaseIngestionSource(db, _factory, Config);
-                    dbSource.StatusMessage += StatusMessage;
+                    dbSource.OnProgressMessage += LoaderMessage;
 
                     await _dataIngestor.DeleteSourceAsync(
                         "data-echoed-documents", "sql-table-chunks", dbSource.SourceId);
-                  
-                  
-
-                  
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage($"Error reingesting database {item.Id}: {ex.Message}");
+                    StatusMessage($"Error reingesting database {item.Id}: {ex.Message}", StatusLevel.Error);
                 }
             }
             await IngestDataAsync(Config);
@@ -268,8 +657,7 @@ namespace AssistantEngine.Factories
             var db = _dbRegistry.Get(item.Id);
             if (db == null)
             {
-                StatusMessage($"Database {item.Id} not found in registry.");
-               // continue;
+                StatusMessage($"Database {item.Id} not found in registry.", StatusLevel.Error);
             }
 
             try
@@ -283,7 +671,7 @@ namespace AssistantEngine.Factories
 
                 // re-ingest
                 var sqlSource = new DatabaseIngestionSource(db, _factory, Config);
-                sqlSource.StatusMessage += StatusMessage;
+                sqlSource.OnProgressMessage += LoaderMessage;
 
                 await _dataIngestor.IngestDataAsync(
                     sqlSource,
@@ -293,7 +681,7 @@ namespace AssistantEngine.Factories
             }
             catch (Exception ex)
             {
-                StatusMessage($"Error reingesting database {item.Id}: {ex.Message}");
+                StatusMessage($"Error reingesting database {item.Id}: {ex.Message}", StatusLevel.Error);
             }
         }
         public async Task ReingestDocuments()
@@ -305,34 +693,21 @@ namespace AssistantEngine.Factories
             {
                 if (!Directory.Exists(item.Path))
                 {
-                    StatusMessage($"Path '{item.Path}' does not exist – skipping.");
+                    StatusMessage($"Path '{item.Path}' does not exist – skipping.", StatusLevel.Error);
                     continue;
                 }
 
                 try
                 {
-                   
-                    /*var csSource = new CSDirectorySource(item.Path, item.ExploreSubFolders);
-                    csSource.StatusMessage += LoaderMessage;
-                    var pdfSource = new PDFDirectorySource(item.Path, item.ExploreSubFolders);
-                    pdfSource.StatusMessage += StatusMessage;
-
-                    await _dataIngestor.DeleteSourceAsync(
-                        "data-echoed-documents", "code-chunks", csSource.SourceId);
-
-                    await _dataIngestor.DeleteSourceAsync(
-                      "data-echoed-documents", "text-chunks", pdfSource.SourceId);*/
-                    // re-ingest
-
 
                     var csSource = new CSDirectorySource(item.Path, item.ExploreSubFolders);
-                    csSource.StatusMessage += LoaderMessage;
+                    csSource.OnProgressMessage += LoaderMessage;
 
                     var pdfSource = new PDFDirectorySource(item.Path, item.ExploreSubFolders);
-                    pdfSource.StatusMessage += LoaderMessage;
+                    pdfSource.OnProgressMessage += LoaderMessage;
 
                     var generalSource = new GeneralDirectorySource(item.Path, item.ExploreSubFolders, item.FileExtensions);
-                    generalSource.StatusMessage += LoaderMessage;
+                    generalSource.OnProgressMessage += LoaderMessage;
 
                     // Remove prior docs/chunks for each source
                     await _dataIngestor.DeleteSourceAsync(
@@ -344,12 +719,10 @@ namespace AssistantEngine.Factories
                     await _dataIngestor.DeleteSourceAsync(
                         "data-echoed-documents", "text-chunks", generalSource.SourceId);
 
-
-
                 }
                 catch (Exception ex)
                 {
-                    StatusMessage($"Error reingesting documents from {item.Path}: {ex.Message}");
+                    StatusMessage($"Error reingesting documents from {item.Path}: {ex.Message}", StatusLevel.Error);
                 }
             }
             await IngestDataAsync(Config);
@@ -373,7 +746,7 @@ namespace AssistantEngine.Factories
             var o = _health.Get(HealthDomain.Ollama);
             if (o.Level != HealthLevel.Healthy)
             {
-                StatusMessage(o.Error ?? "Ollama not reachable; skipping ingestion.");
+                StatusMessage(o.Error ?? "Ollama not reachable; skipping ingestion.", StatusLevel.Error);
                 return;
             }
 
@@ -387,7 +760,7 @@ namespace AssistantEngine.Factories
                 try
                 {
                     var csSource = new CSDirectorySource(item.Path, item.ExploreSubFolders);
-                    csSource.StatusMessage += LoaderMessage;
+                    csSource.OnProgressMessage += LoaderMessage;
                     await _dataIngestor.IngestDataAsync(csSource, "code-chunks", "data-echoed-documents");
 
                    /* var codeChunksCount = await _dataIngestor.CountChunksAsync("code-chunks");
@@ -397,7 +770,7 @@ namespace AssistantEngine.Factories
 
 
                     var generalSource = new GeneralDirectorySource(item.Path, item.ExploreSubFolders, item.FileExtensions);
-                    generalSource.StatusMessage += LoaderMessage;
+                    generalSource.OnProgressMessage += LoaderMessage;
                     await _dataIngestor.IngestDataAsync(generalSource, "text-chunks", "data-echoed-documents");
 
                     /*var textChunksCountGeneral = await _dataIngestor.CountChunksAsync("text-chunks");
@@ -407,7 +780,7 @@ namespace AssistantEngine.Factories
 
 
                     var pdfSource = new PDFDirectorySource(item.Path, item.ExploreSubFolders);
-                    pdfSource.StatusMessage += LoaderMessage;
+                    pdfSource.OnProgressMessage += LoaderMessage;
                     await _dataIngestor.IngestDataAsync(pdfSource, "text-chunks", "data-echoed-documents");
 
                     /*var textChunksCountPDF = await _dataIngestor.CountChunksAsync("text-chunks");
@@ -439,7 +812,7 @@ namespace AssistantEngine.Factories
                 {
                     var descriptorClient = _factory(Config.DescriptorModel.ModelId);
                     var sqlSource = new DatabaseIngestionSource(db, _factory, Config);
-                    sqlSource.StatusMessage += LoaderMessage;
+                    sqlSource.OnProgressMessage +=  LoaderMessage;
                     try
                     {
                         await _dataIngestor.IngestDataAsync(
@@ -533,7 +906,12 @@ namespace AssistantEngine.Factories
             if (allDocs.Any())
                 await documents.DeleteAsync(allDocs.Select(x => x.Key));
         }
-
+        public void Dispose()
+        {
+            _notifier.OnStatusMessage -= StatusMessage;
+            _dbRegistry.DatabaseAdded -= OnDatabaseAddedAsync;
+            _dbRegistry.DatabaseRemoved -= OnDatabaseRemoved;
+        }
         public async Task SoftWipeVectorStoresAsync(string sqlitePath)
         {
             try
@@ -545,11 +923,11 @@ namespace AssistantEngine.Factories
                 }
 
                 await WipeCollectionsAsync();
-                StatusMessage("🧹 Vector store wiped (all collections emptied).");
+                StatusMessage("🧹 Vector store wiped (all collections emptied).", StatusLevel.Information);
             }
             catch (Exception ex)
             {
-                StatusMessage($"❌ Wipe failed: {ex.Message}");
+                StatusMessage($"❌ Wipe failed: {ex.Message}", StatusLevel.Error);
             }
         }
 
@@ -560,21 +938,20 @@ namespace AssistantEngine.Factories
 
             try
             {
-                // ensure DB registry reflects current config before ingest
                 if (Config is not null && Config.Databases is not null)
                 {
                     foreach (var dbCfg in Config.Databases)
                         _dbRegistry.Register(dbCfg);
                 }
 
-                OnStatusMessage?.Invoke("🚛 Re-ingesting all data…");
+                StatusMessage("🚛 Re-ingesting all data…", StatusLevel.Information);
                 await IngestDataAsync(Config);
                 IngestionFinished = true;
-                OnStatusMessage?.Invoke("✅ Re-ingest complete.");
+                StatusMessage("✅ Re-ingest complete.", StatusLevel.Success);
             }
             catch (Exception ex)
             {
-                StatusMessage($"❌ Re-ingest failed: {ex.Message}");
+                StatusMessage($"❌ Re-ingest failed: {ex.Message}", StatusLevel.Error);
             }
         }
     }

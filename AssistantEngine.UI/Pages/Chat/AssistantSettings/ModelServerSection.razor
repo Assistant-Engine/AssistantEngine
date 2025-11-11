@@ -7,7 +7,7 @@
     <dl>
         <dt>Provider</dt>
         <dd class="tokencount-op-inner">
-            <InputSelect @bind-Value="AssistantConfig.ModelProvider" class="form-control mot2">
+            <InputSelect @bind-Value="AssistantConfig.ModelProvider" @oninput="(_) => MarkDirty?.Invoke()" class="form-control mot2">
                 <option value="Ollama">Ollama</option>
             </InputSelect>
         </dd>
@@ -19,6 +19,7 @@
         </dt>
         <dd class="tokencount-op-inner">
             <InputText @bind-Value="AssistantConfig.ModelProviderUrl"
+                       @oninput="(_) => MarkDirty?.Invoke()"
                        class="form-control mot2"
                        placeholder="http://localhost:11434"
                        @onblur="EnsureProviderUrl" />

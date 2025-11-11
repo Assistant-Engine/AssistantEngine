@@ -2,6 +2,7 @@
 using AssistantEngine.Services.Implementation;
 using AssistantEngine.Services.Implementation.Tools;
 using AssistantEngine.UI.Services.AppDatabase;
+using AssistantEngine.UI.Services.Extensions;
 using AssistantEngine.UI.Services.Implementation.Chat;
 using AssistantEngine.UI.Services.Implementation.Config;
 using AssistantEngine.UI.Services.Implementation.Database;
@@ -21,6 +22,7 @@ using AssistantEngine.UI.Services.Notifications;
 using AssistantEngine.UI.Services.Ollama;
 using AssistantEngine.UI.Services.Options;
 using Dapper;
+using Microsoft.Agents.AI;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -104,6 +106,7 @@ public static class DependencyInjection
         services.AddHostedService<EvaluationSchedulerService>();
         // Chat / Ollama client factories
         // after other services
+        services.AddScoped<IModelInstaller, OllamaModelInstaller>();
         services.AddScoped<IModelCache, OllamaModelCache>();
 
         services.AddSingleton<IOllamaClientResolver, OllamaClientResolver>();
@@ -132,6 +135,23 @@ public static class DependencyInjection
             var resolver = sp.GetRequiredService<IOllamaClientResolver>();
             return (IEmbeddingGenerator<string, Embedding>)resolver.For(state.Config, modelId);
         });
+
+        services.AddScoped<AIAgentFactory>(sp => (modelId) =>
+        {
+            var chatFactory = sp.GetRequiredService<ChatClientFactory>();
+            var state = sp.GetRequiredService<ChatClientState>();
+            var id = modelId ?? state.Config.AssistantModel.ModelId;
+            var opts = new ChatClientAgentOptions(
+           instructions: state.Config?.SystemPrompt,
+           name: state.Config?.Name)
+            {
+                ChatOptions = state.Config.WithEnabledToolsAndMcp(sp)
+            };
+
+       
+            return chatFactory(id).CreateAIAgent(opts, sp.GetService<ILoggerFactory>(), sp);
+        });
+
 
         services.AddSingleton<IToolStatusNotifier, ToolStatusNotifier>();
         services.AddScoped<ChatClientState>();

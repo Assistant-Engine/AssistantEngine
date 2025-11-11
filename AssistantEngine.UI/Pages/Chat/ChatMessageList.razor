@@ -1,28 +1,33 @@
 @inject IJSRuntime JS
 
-<div class="message-list-container">
-    <chat-messages class="page-width message-list" in-progress="@(InProgressMessage is not null)">
-        @foreach (var message in Messages)
-        {
-            <ChatMessageItem @key="@message" Message="@message" OnEditSubmit="OnEditSubmit" />
-        }
 
-        @if (InProgressMessage is not null)
-        {
-            <ChatMessageItem Message="@InProgressMessage" InProgress="true"  />
-            <LoadingSpinner />
-        }else if (IsLoading)
-        {
-          <AssistantEngine.UI.Pages.Chat.Extensions.EmptyAssistant></AssistantEngine.UI.Pages.Chat.Extensions.EmptyAssistant>
-        }
-        else if (IsEmpty)
-        {
-            <div class="no-messages">@NoMessagesContent</div>
-        }
-        @*<ChatLoadingSpinner Visible="@IsLoading" Message="Thinking" />*@
+    <chat-messages class="message-list" in-progress="@(InProgressMessage is not null)">
+         <div class="message-list-inner page-width">
+            @foreach (var message in Messages)
+            {
+                <ChatMessageItem @key="@message" Message="@message" OnEditSubmit="OnEditSubmit" />
+            }
+
+            @if (InProgressMessage is not null)
+            {
+                <ChatMessageItem Message="@InProgressMessage" InProgress="true"  />
+                <LoadingSpinner />
+            }else if (IsLoading)
+            {
+              <AssistantEngine.UI.Pages.Chat.Extensions.EmptyAssistant></AssistantEngine.UI.Pages.Chat.Extensions.EmptyAssistant>
+            }
+            else if (IsEmpty)
+            {
+                <div class="no-messages">@NoMessagesContent</div>
+            }
+            @*<ChatLoadingSpinner Visible="@IsLoading" Message="Thinking" />*@
+            <ChatCompletionInfo ChatResponse="@ChatResponse" />
+            <div class="end-anchor"></div>
+
+        </div>
     </chat-messages>  
-    <ChatCompletionInfo ChatResponse="@ChatResponse"/>
-</div>
+
+
 
 @code {
     [Parameter]

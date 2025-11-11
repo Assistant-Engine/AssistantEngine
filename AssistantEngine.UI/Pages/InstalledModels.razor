@@ -15,12 +15,21 @@
 <div id="ollama-import-page" class="">
     <div class="ollama-import-header nav-top">
         <h4 class="ollama-import-title">Installed Models     
+            <div class="search-box">
+                <i class="fi fi-br-search"></i>
+                <input class="form-control ollama-install-search installed-models-search"
+                       placeholder="Search"
+                       aria-label="Search installed models"
+                       @bind="search"
+                       @bind:event="oninput" />
+            </div>
             <div class="server-config-wrapper">
                 <div class="server-config-text">
                     Assistant Server:
                 </div>
+          
                 <ConfigDropdown @ref="configDD" OnSelect="@HandleModelAssistantSelected" />
-                </div>
+            </div>
          </h4>
       
     </div>
@@ -38,7 +47,9 @@
                         <table class="models-table">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
+                                    <th>
+                                        Name
+                                    </th>
                                     <th>Quant</th>
                                     <th>Arch</th>
                                     <th>Parameters</th>
@@ -52,8 +63,17 @@
                                 @{
                                     var loadedSet = new HashSet<string>(running_models.Select(r => r.Name));
                                 }
-
-                                @foreach (var m in local_models
+                                @if (!FilteredLocalModels.Any())
+                                {
+                                    <tr>
+                                        <td colspan="7" class="empty-note">
+                                            No installed models match your search.
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                @foreach (var m in FilteredLocalModels
                                                             .OrderBy(m => !loadedSet.Contains(m.Name))
                                                             .ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase))
                                 {
@@ -108,6 +128,8 @@
                                         </td>
                                     </tr>
                                 }
+                     
+                            }
                             </tbody>
                         </table>
                     </div>
@@ -137,6 +159,12 @@
         models = await ModelService.GetModelsAsync();
         Snapshot();
     }
+    private string search = "";
+
+    private IEnumerable<Model> FilteredLocalModels =>
+        string.IsNullOrWhiteSpace(search)
+            ? local_models
+            : local_models.Where(m => m.Name?.Contains(search, StringComparison.OrdinalIgnoreCase) == true);
 
     private void OnCacheChanged()
     {

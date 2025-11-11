@@ -1,600 +1,152 @@
-﻿@using System.ComponentModel
-@using AssistantEngine.Factories
-@using AssistantEngine.Services.Extensions
-@using AssistantEngine.Services.Implementation
-@using AssistantEngine.UI.Pages.Chat.AssistantSettings
+﻿@using AssistantEngine.Factories
 @using AssistantEngine.UI.Services
-@using AssistantEngine.UI.Services.Implementation.Database
-@using AssistantEngine.UI.Services.Implementation.Factories
 @using AssistantEngine.UI.Services.Implementation.Models.Chat
-@using AssistantEngine.UI.Services.Models
 @using AssistantEngine.UI.Services.Models.Chat
-@using System.Text.RegularExpressions
-@using static AssistantEngine.Services.Extensions.ChatMessageExtensions;
+@using AssistantEngine.UI.Pages.Chat.AssistantSettings
 
-@inject NavigationManager Nav
-@inject SemanticSearch Search
-@implements IDisposable
-@inject ChatClientState ClientState
-@inject IDatabaseRegistry DbRegistry
-@inject IAppHealthService Health
-@inject ChatClientFactory ChatFactory
 @inject IJSRuntime JSRuntime
+@inject ChatClientState ClientState
 @inject IChatRepository ChatRepository
-
+@implements IDisposable
 
 @if (showPageSpinner)
 {
-    <PageSpinner1>
-    </PageSpinner1>
+    <PageSpinner1 />
 }
+
 @if (showChatMessageSidebar)
-                {
-<ChatSidebar OnNewChat="@ResetConversationAsync" CurrentSession="@chatSession"
-         CurrentSessionChanged="OnSessionChanged"  
-         OpenSettingsModalRequested="OpenSettingsModal" />
-                }
+{
+    <ChatSidebar OnNewChat="@ResetConversationAsync"
+                 CurrentSession="@ClientState.Session"
+                 CurrentSessionChanged="OnSessionChanged"
+                 OpenSettingsModalRequested="OpenSettingsModal" />
+}
 
 <OllamaImportModal @ref="_importModal" />
 <GlobalSettingsModal @ref="_settingsModal" />
 
+<div id="chat-container-outer">
+    <div class="chat-container-inner">
 
-            <div id="chat-container-outer">
+        <ChatHeader @ref="header"
+                    OnToggleEvaluations="ToggleEvaluations"
+                    OpenModalRequested="OpenImportModal"
+                    OnStateChange="@SwitchModel"
+                    OnNewChat="@ResetConversationAsync"
+                    OnStateSelected="SwitchModel2"
+                    OnToggleChatOptionsSidebar="ToggleChatOptionsSidebar"
+                    OnToggleChatMessageSidebar="ToggleChatMessageSidebar"
+                    IsSidebarVisible="@showChatOptionsSidebar" />
 
-                <div class="chat-container-inner">
-
-        <ChatHeader @ref="header" OnToggleEvaluations="ToggleEvaluations" OpenModalRequested="OpenImportModal" OnStateChange="@SwitchModel" OnNewChat="@ResetConversationAsync" OnStateSelected="SwitchModel2" OnToggleChatOptionsSidebar="ToggleChatOptionsSidebar" OnToggleChatMessageSidebar="ToggleChatMessageSidebar" IsSidebarVisible="@showChatOptionsSidebar" />
-
-                    @if (!isIngesting)
-                    {
-                        <ChatMessageList Messages="@messages" ChatResponse="@chatResponse" InProgressMessage="@currentResponseMessage" IsLoading="@isLoading" IsStreaming="@isStreaming" OnEditSubmit="@OnUserEditSubmit">
+        @if (!isIngesting)
+        {
+            <ChatMessageList Messages="@ClientState.Messages"
+                             InProgressMessage="@ClientState.InProgress"
+                             IsLoading="@ClientState.IsLoading"
+                             IsStreaming="@ClientState.IsStreaming"
+                             ChatResponse="@ClientState.ChatResponse"
+                             OnEditSubmit="@OnUserEditSubmit">
                 <NoMessagesContent>
                     <img src="_content/AssistantEngine.UI/img/logo-watermark-2.svg" id="inner-logo-main" />
-                            </NoMessagesContent>
-                        </ChatMessageList>
-                    }
-                    else
-                    {
-                        <LoadingSpinner Visible="@isIngesting" Message="Ingesting Data..." />
+                </NoMessagesContent>
+            </ChatMessageList>
+        }
+        else
+        {
+            <LoadingSpinner Visible="@isIngesting" Message="Ingesting Data..." />
+        }
 
-                    }
+        <div id="chat-container" class="chat-container">
+            <ChatSuggestions OnSelected="@AddUserMessageAsync" @ref="@chatSuggestions" />
+            <ChatInput OnSend="@AddUserMessageAsync" @ref="@chatInput" />
+        </div>
+    </div>
 
-                    <div id="chat-container" class="chat-container">
-                        <ChatSuggestions OnSelected="@AddUserMessageAsync" @ref="@chatSuggestions" />
-                        <ChatInput OnSend="@AddUserMessageAsync" @ref="@chatInput" />
-
-                    </div>
-                </div>
-                @if (showChatOptionsSidebar)
-                {
-                    <AssistantSettingsSidebar OnStateChange="@SwitchModel" AssistantConfig="@ClientState.Config" class="order-last" />
-                }
-
-            </div>
-
+    @if (showChatOptionsSidebar)
+    {
+        <AssistantSettingsSidebar OnStateChange="@SwitchModel"
+                                  AssistantConfig="@ClientState.Config"
+                                  class="order-last" />
+    }
+</div>
 
 @code {
     private ChatHeader? header;
     private OllamaImportModal? _importModal;
     private GlobalSettingsModal? _settingsModal;
-    private DotNetObjectReference<Chat>? _ref;
-    Dictionary<string, IDatabase> databaseDict;
-
-    ChatSession chatSession = new();
-    private List<ChatMessage> messages = new();
-
-    private SidebarTab current = SidebarTab.Chats;
-
-    void HandleTabChanged(SidebarTab tab)
-    {
-        current = tab; // parent decides what to render
-        StateHasChanged();
-    }
-
-    private void ToggleEvaluations()
-    {
-
-    }
-    private async Task SwitchModel()
-    {
-        await ChatRepository.SaveAsync(chatSession);
-        await OnParametersSetAsync();
-        await InvokeAsync(StateHasChanged);
-
-    }
-    private void OpenSettingsModal() => _settingsModal?.Open();
-    private void OpenImportModal() => _importModal?.OpenDownloadModal();
-    private void SetupChatState()
-    {
-        databaseDict = DbRegistry.All.ToDictionary(x => x.Key, x => x.Value);
-
-        // only add system prompt once
-        if (messages.Count > 0)
-        {
-            messages.Clear();
-        }
-
-        if (messages.Count == 0)
-            messages.Add(new(ChatRole.System, ClientState.Config.SystemPrompt));
-
-        Console.WriteLine(chatOptions.Tools);
-    }
-
-
-
-    private async Task GenerateAssistantResponseStreamingAsync(List<ChatMessage> filteredMessages)
-    {
-        currentResponseCancellation?.Dispose();
-        currentResponseCancellation = new();
-        isLoading = true;
-
-        var startTime = DateTime.UtcNow;
-        DateTime? firstTokenTime = null;
-
-        currentResponseMessage = new ChatMessage
-        {
-            MessageId = Guid.NewGuid().ToString(),
-            Role = ChatRole.Assistant,
-            CreatedAt = DateTime.UtcNow,
-            AdditionalProperties = new()
-
-        };
-
-
-       // var reasoning = new AssistantEngine.Services.Extensions.ChatMessageExtensions.ReasoningAccumulator(currentResponseMessage);
-
-        try
-        {
-            var updatesBuffer = new List<ChatResponseUpdate>();
-            var mergedAdditional = new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
-
-            await foreach (var update in ChatClient
-                .GetStreamingResponseAsync(filteredMessages, chatOptions, currentResponseCancellation.Token)
-                .ConfigureAwait(false))
-            {
-                isStreaming = true;
-                updatesBuffer.Add(update);
-
-                if (update?.AdditionalProperties is not null)
-                    foreach (var kv in update.AdditionalProperties)
-                        mergedAdditional[kv.Key] = kv.Value;
-
-                var contents = update?.Contents ?? [];
-                var reasoningBuf = new System.Text.StringBuilder(); // per-update temp
-
-                foreach (var c in contents)
-                {
-                    if (!firstTokenTime.HasValue) {
-                        firstTokenTime = DateTime.UtcNow;
-                        currentResponseMessage.AdditionalProperties["StartedThinkingAt"] = DateTime.UtcNow;
-                    }
-
-                    var last = currentResponseMessage.Contents.LastOrDefault();
-                    if (c is TextReasoningContent reasoningCont && last is TextReasoningContent lastContent)
-                    {
-
-                        lastContent.Text += reasoningCont.Text;
-                        MergeProps(lastContent, reasoningCont);     
-                    }
-                    else if (c is TextContent textCont && last is TextContent lastCont)
-                    {
-                        if (!currentResponseMessage.AdditionalProperties.ContainsKey("FinishedThinkingAt"))
-                        {
-                            currentResponseMessage.AdditionalProperties["FinishedThinkingAt"] = DateTime.UtcNow;
-                        }
-                        lastCont.Text += textCont.Text;
-                        MergeProps(lastCont, textCont);
-
-                    }
-                    else
-                    {
-                        if(last?.AdditionalProperties != null)
-                        {
-                            last.AdditionalProperties["FinishedAt"] = DateTime.UtcNow;
-                        }
-
-                        c.AdditionalProperties ??= new();
-                        c.AdditionalProperties["StartedAt"] = DateTime.UtcNow;
-                        currentResponseMessage.Contents.Add(c);
-                    }
-                   
-                }
-
-                // metadata-origin reasoning (also sanitized)
-                if (update?.AdditionalProperties is not null)
-                {
-                    if (update.AdditionalProperties.TryGetValue("thoughts", out var th) && th is not null)
-                        reasoningBuf.Append(AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(th.ToString()));
-
-                    if (update.AdditionalProperties.TryGetValue("reasoning", out var rz) && rz is not null)
-                        reasoningBuf.Append(AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(rz.ToString()));
-
-                    if (update.AdditionalProperties.TryGetValue("metadata", out var mdObj)
-                        && mdObj is IDictionary<string, object> md
-                        && md.TryGetValue("thoughts", out var mdThoughts) && mdThoughts is not null)
-                        reasoningBuf.Append(AssistantEngine.Services.Extensions.ChatMessageExtensions.SanitizeThinking(mdThoughts.ToString()));
-                }
-
-                if (reasoningBuf.Length > 0)
-                {
-                 //   reasoning.AppendSanitized(reasoningBuf.ToString());
-                }
-
-                ChatMessageItem.NotifyChanged(currentResponseMessage!);
-                await InvokeAsync(StateHasChanged);
-            }
-        
-            async IAsyncEnumerable<ChatResponseUpdate> Replay()
-            {
-                foreach (var u in updatesBuffer) yield return u;
-            }
-            chatResponse = await Replay().ToChatResponseAsync(currentResponseCancellation.Token);
-
-            chatResponse.AdditionalProperties ??= new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
-            foreach (var kv in mergedAdditional)
-                chatResponse.AdditionalProperties[kv.Key] = kv.Value;
-
-            var finishTime = DateTime.UtcNow;
-            var totalAll = finishTime - startTime;
-
-            if (!chatResponse.AdditionalProperties.ContainsKey("total_duration_all"))
-                chatResponse.AdditionalProperties["total_duration_all"] = totalAll;
-
-            var loadDuration = firstTokenTime.HasValue ? (firstTokenTime.Value - startTime) : totalAll;
-            if (!chatResponse.AdditionalProperties.ContainsKey("load_duration"))
-                chatResponse.AdditionalProperties["load_duration"] = loadDuration;
-
-            var evalDuration = firstTokenTime.HasValue ? (finishTime - firstTokenTime.Value) : TimeSpan.Zero;
-            if (!chatResponse.AdditionalProperties.ContainsKey("eval_duration"))
-                chatResponse.AdditionalProperties["eval_duration"] = evalDuration;
-
-            if (!chatResponse.AdditionalProperties.ContainsKey("total_duration"))
-                chatResponse.AdditionalProperties["total_duration"] = evalDuration;
-
-            if (!chatResponse.AdditionalProperties.ContainsKey("tool_duration"))
-                chatResponse.AdditionalProperties["tool_duration"] = TimeSpan.Zero;
-
-            messages.Add(currentResponseMessage!);
-            chatSession.Messages = messages;
-            currentResponseMessage = null;
-            isStreaming = false;
-            isLoading = false;
-
-            chatSuggestions?.Update(messages);
-            await ChatRepository.SaveAsync(chatSession);
-
-            if (chatSession.DefaultTitle())
-                await SetChatMessageTitle();
-        }
-        catch (OperationCanceledException)
-        {
-            isLoading = false;
-        }
-        catch (Exception ex)
-        {
-            isLoading = false;
-            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", ex.Message, "Streaming");
-        }
-    }
-    static void MergeProps(AIContent target, AIContent src)
-    {
-        if (src.AdditionalProperties is null) return;
-        target.AdditionalProperties ??= new();
-        foreach (var kv in src.AdditionalProperties) target.AdditionalProperties[kv.Key] = kv.Value;
-    }
-
-
-
-    private IChatClient ChatClient => ChatFactory(ClientState.Config.AssistantModel.ModelId);
-    private IChatClient MiniClient => ChatFactory(ClientState.Config.MiniTaskModel.ModelId);
-    AssistantConfig CurrentConfig => ClientState.Config;
-    private bool isIngesting => !ClientState.IngestionFinished;
-    //IChatClient ChatClient => (IChatClient) ClientState.Client; testing with this removed
-
-
-    protected override void OnInitialized()
-    {
-        ClientState.OnLoaderMessage += (v, m) =>
-        {
-
-            InvokeAsync(StateHasChanged);
-        };
-    }
-
-    private async Task OnSessionChanged(ChatSession session)
-    {
-        CancelAnyCurrentResponse();
-        chatSession = session;
-        messages = chatSession.Messages?.ToList() ?? new List<ChatMessage>();
-        await InvokeAsync(StateHasChanged);
-
-    }
-    private ChatOptions chatOptions => ClientState.ChatOptions;
-
-    private CancellationTokenSource? currentResponseCancellation;
-    private ChatMessage? currentResponseMessage;
-    private ChatResponse? chatResponse;
     private ChatInput? chatInput;
     private ChatSuggestions? chatSuggestions;
 
+    // UI state
     private bool showPageSpinner = false;
     private bool showChatOptionsSidebar = true;
     private bool showChatMessageSidebar = true;
-    private bool isLoading = false;
-    private bool isStreaming = false;
+    private bool isIngesting => !ClientState.IngestionFinished;
+    private Action<bool, string?>? _loaderHandler;
 
-    private void ToggleChatOptionsSidebar()
+    private void HandleStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    protected override void OnInitialized()
     {
-        showChatOptionsSidebar = !showChatOptionsSidebar;
+        _loaderHandler = (v, m) => _ = InvokeAsync(StateHasChanged);
+        ClientState.OnLoaderMessage += _loaderHandler;
 
-    }
-    private void ToggleChatMessageSidebar()
-    {
-        showChatMessageSidebar = !showChatMessageSidebar;
-
-    }
-
-    // — then call it here (and drop OnInitialized entirely)
-    // — then call it here (and drop OnInitialized entirely)
-    protected override async Task OnParametersSetAsync()
-    {
-        try
-        {
-            SetupChatState();
-            // await base.OnParametersSetAsync();
-            await base.OnParametersSetAsync();
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-            Console.WriteLine(ex.StackTrace);
-        }
-
+        ClientState.OnStateChanged -= HandleStateChanged; // avoid dupes
+        ClientState.OnStateChanged += HandleStateChanged;
     }
 
-
-
-    private OllamaSharp.Models.Model currentModel;
-    // NEW: centralize assistant generation so edits can reuse it
-    private async Task GenerateAssistantResponseAsync(List<ChatMessage> filteredMessages)
+    public void Dispose()
     {
-        //currentResponseCancellation ??= new();
-        currentResponseCancellation?.Dispose();
-        currentResponseCancellation = new();   // ✅ always fresh
-        DateTime startTime = DateTime.UtcNow;
+        if (_loaderHandler is not null)
+            ClientState.OnLoaderMessage -= _loaderHandler;
 
-
-
-        var response = await ChatClient.GetResponseAsync(filteredMessages, chatOptions, currentResponseCancellation.Token);
-        var merged = new List<ChatMessage>();
-        ChatMessage? buffer = null;
-
-        foreach (var m in response.Messages)
-        {
-            if (m.Role == ChatRole.Assistant)
-            {
-                if (buffer == null)
-                {
-                    buffer = new ChatMessage
-                    {
-                        MessageId = Guid.NewGuid().ToString(),
-                        Role = ChatRole.Assistant
-                    };
-                    foreach (var c in m.Contents ?? Enumerable.Empty<AIContent>())
-                        buffer.Contents.Add(c);
-                }
-                else
-                {
-                    foreach (var c in m.Contents ?? Enumerable.Empty<AIContent>())
-                        buffer.Contents.Add(c);
-                }
-            }
-            else if (m.Role == ChatRole.User)
-            {
-                if (buffer != null) { merged.Add(buffer); buffer = null; }
-                merged.Add(new ChatMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    Role = m.Role,
-                    Contents = new List<AIContent>(m.Contents ?? [])
-                });
-            }
-            else
-            {
-                merged.Add(new ChatMessage
-                {
-                    MessageId = Guid.NewGuid().ToString(),
-                    Role = m.Role,
-                    Contents = new List<AIContent>(m.Contents ?? [])
-                });
-            }
-        }
-        if (buffer != null) merged.Add(buffer);
-
-        foreach (var mm in merged)
-        {
-            if (string.IsNullOrEmpty(mm.MessageId) || messages.Any(x => x.MessageId == mm.MessageId))
-                mm.MessageId = Guid.NewGuid().ToString();
-
-            messages.Add(mm.Clone());
-        }
-
-        DateTime finishTime = DateTime.UtcNow;
-        TimeSpan duration = finishTime - startTime;
-        if (response.AdditionalProperties != null)
-        {
-            response.AdditionalProperties.Add("total_duration_all", duration);
-            if (response.AdditionalProperties.TryGetValue("total_duration", out var td) && TimeSpan.TryParse(td?.ToString(), out var totalDurationAnalysis))
-                response.AdditionalProperties.Add("tool_duration", duration - totalDurationAnalysis);
-        }
-
-        isLoading = false;
-
-        chatSession.Messages = messages;
-        chatResponse = response;
-
-        if (chatSession.DefaultTitle())
-            await SetChatMessageTitle();
-
-        chatSuggestions?.Update(messages);
-        await ChatRepository.SaveAsync(chatSession);
+        ClientState.OnStateChanged -= HandleStateChanged;
     }
 
-    // UPDATED: use the helper above
+    private void ToggleChatOptionsSidebar() => showChatOptionsSidebar = !showChatOptionsSidebar;
+    private void ToggleChatMessageSidebar() => showChatMessageSidebar = !showChatMessageSidebar;
+
+    private void ToggleEvaluations() { /* hook up when ready */ }
+
+    private async Task SwitchModel()
+    {
+        await ChatRepository.SaveAsync(ClientState.Session);
+        ClientState.RefreshTools();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private Task SwitchModel2() => Task.CompletedTask;
+
+    private void OpenSettingsModal() => _settingsModal?.Open();
+    private void OpenImportModal() => _importModal?.OpenDownloadModal();
+
+    private async Task OnSessionChanged(ChatSession session)
+    {
+        await ClientState.LoadSessionAsync(session);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Sending/editing messages
     private async Task AddUserMessageAsync(ChatMessage userMessage)
     {
-        var o = Health.Get(HealthDomain.Ollama);
-        if (o.Level != HealthLevel.Healthy)
-        {
-            await JSRuntime.InvokeVoidAsync("GLOBAL.toastrInterop.error", o.Error ?? "Ollama not reachable.", "Chat");
-            return;
-        }
-
-        CancelAnyCurrentResponse();
-
-        messages.Add(userMessage);
-        chatSuggestions?.Clear();
-        await chatInput!.FocusAsync();
-
-        currentResponseCancellation = new();
-        isLoading = true;
-        await InvokeAsync(StateHasChanged);
-
-        var filteredMessages = FilterChatMessages(messages);
-        await GenerateAssistantResponseStreamingAsync(filteredMessages);
+        _ = chatInput!.FocusAsync();
+        await ClientState.EnqueueAndRunAsync(userMessage);
     }
 
-    // NEW: handle inline user-message edit → truncate future → regenerate
     private async Task OnUserEditSubmit((ChatMessage message, string newText) edit)
     {
-        var (msg, newText) = edit;
-
-        CancelAnyCurrentResponse();
-
-        var idx = messages.FindIndex(m => m.MessageId == msg.MessageId);
-        if (idx < 0) idx = messages.IndexOf(msg);
-        if (idx < 0) return;
-
-        // update the edited user message
-        messages[idx] = new (ChatRole.User, newText);
-        try
-        {
-            // messages[idx].Contents?.Clear();
-            // messages[idx].Contents?.Add(new TextContent(newText));
-        }
-        catch { /* safe no-op if types differ */ }
-
-        // drop everything after the edited message
-        if (idx < messages.Count - 1)
-            messages.RemoveRange(idx + 1, messages.Count - (idx + 1));
-
-        chatResponse = null;
-        isLoading = true;
-        await InvokeAsync(StateHasChanged);
-
-        var filtered = FilterChatMessages(messages);
-        await GenerateAssistantResponseStreamingAsync(filtered);
+        await ClientState.EditAndRegenerateAsync(edit.message.MessageId!, edit.newText);
     }
 
-    private List<ChatMessage> FilterChatMessages(List<ChatMessage> messagesToFilter)
+    private async Task ResetConversationAsync()
     {
-        var filteredMessages = messagesToFilter;
-        ChatOptions chatOptions = new ChatOptions();
-
-
-        if (!ClientState.Config.PersistThoughtHistory)
-        {
-            filteredMessages.RemoveThinkMessages();
-        }
-
-        return filteredMessages;
-    }
-
-
-    private async Task SetChatMessageTitle()
-    {
-        try
-        {
-            var miniOptions = ClientState.Config.ModelOptions.First(m => m.Key == "MiniTask").Options;
-            List<ChatMessage> messagesx = new();
-            string prompt = $"Output a maximum three word title for text you receive. Only ever output these words.";
-            string userMessage = messages.First(x => x.Role == ChatRole.User).Text;
-            messagesx.Add(new(ChatRole.System, prompt));
-            messagesx.Add(new(ChatRole.User, userMessage));
-            var response = await MiniClient.GetResponseAsync(messagesx, miniOptions);
-            string title = ChatMessageExtensions.RemoveThinkTags(response.Messages.First(x => x.Role == ChatRole.Assistant).Text);
-            chatSession.Title = title;
-            await ChatRepository.SaveAsync(chatSession);
-            await InvokeAsync(StateHasChanged);
-        }catch(Exception ex)
-        {
-            Console.WriteLine("Error Setting Chat Message Title");
-            Console.WriteLine(ex.Message);
-            Console.WriteLine(ex.StackTrace);
-        }
-
-    }
-
-    private Task SwitchModel2()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task SwitchModel(OllamaSharp.Models.Model model)
-    {
-        currentModel = model;
-        // maybe restart the chat or just show the new model name
-        return Task.CompletedTask;
-    }
-    private void CancelAnyCurrentResponse()
-    {
-        // If a response was cancelled while streaming, include it in the conversation so it's not lost
-        if (currentResponseMessage is not null)
-        {
-            messages.Add(currentResponseMessage);
-        }
-        isLoading = false;
-        chatResponse = null;
-        currentResponseCancellation?.Cancel();
-        currentResponseMessage = null;
-    }
-
-    private async Task ResetConversationAsync() //clear active here
-    {
-        try{
-            chatSession = new();
-            CancelAnyCurrentResponse();
-            messages.Clear();
-            messages.Add(new(ChatRole.System, ClientState.Config.SystemPrompt));
-            chatSuggestions?.Clear(); chatResponse = null;
-            await chatInput!.FocusAsync();
-        }catch(Exception ex)
-        {
-            Console.WriteLine(ex.Message);Console.WriteLine(ex.StackTrace);
-        }
-
+        await ClientState.ResetConversationAsync();
+        await chatInput!.FocusAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        await JSRuntime.InvokeVoidAsync("GLOBAL.HighlightAllPrism");
+        if (!ClientState.IsStreaming)          // skip while streaming
+            await JSRuntime.InvokeVoidAsync("GLOBAL.HighlightAllPrism");
     }
-
-    // add once in the component/class
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte>
-        _pulling = new(System.StringComparer.OrdinalIgnoreCase);
-    private readonly CancellationTokenSource cts = new();
-
-
-
-
-
-    public void Dispose()
-    {
-        currentResponseCancellation?.Cancel();
-       // if (_healthHandler is not null) Health.Changed -= _healthHandler;
-        ///ClientState.OnStatusMessage -= OnStatusMessageHandler;
-    }
-
-
 }

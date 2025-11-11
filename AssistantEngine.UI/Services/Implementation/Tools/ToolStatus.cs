@@ -1,25 +1,26 @@
-﻿namespace AssistantEngine.Services.Implementation
+﻿using AssistantEngine.UI.Services.Types;
+
+namespace AssistantEngine.Services.Implementation
 {
-    // 1) Define the interface
+
     public interface IToolStatusNotifier
     {
-        /// <summary>
-        /// Fired whenever a tool wants to emit a status update.
-        /// </summary>
-        event Action<string>? OnStatusMessage;
+        event Action<StatusMessage>? OnStatusMessage;
 
-        /// <summary>
-        /// Call this from inside your tool to broadcast a status.
-        /// </summary>
-        void StatusMessage(string msg);
+        void StatusMessage(StatusMessage s);
+        void StatusMessage(string msg, StatusLevel level = StatusLevel.Information, string? title = null, string? source = null);
     }
 
-    // 2) Implement it
+
     public class ToolStatusNotifier : IToolStatusNotifier
     {
-        public event Action<string>? OnStatusMessage;
-        public void StatusMessage(string msg)
-            => OnStatusMessage?.Invoke(msg);
+        public event Action<StatusMessage>? OnStatusMessage;
+
+        public void StatusMessage(StatusMessage s) => OnStatusMessage?.Invoke(s);
+
+        public void StatusMessage(string msg, StatusLevel level = StatusLevel.Information, string? title = null, string? source = null)
+            => OnStatusMessage?.Invoke(new StatusMessage(msg, level, title, source));
     }
+
 
 }

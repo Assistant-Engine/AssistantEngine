@@ -3,6 +3,8 @@ const GLOBAL = window.GLOBAL;
 GLOBAL.DotNetReferences = GLOBAL.DotNetReferences || {};
 GLOBAL.OpenDropdownId = GLOBAL.OpenDropdownId ?? null;
 
+
+
 // Set the DotNetReference for a component (using the dropdownId as key)
 GLOBAL.SetDotnetReference = function (dropdownId, pDotNetReference) {
     GLOBAL.DotNetReferences[dropdownId] = pDotNetReference;
@@ -19,12 +21,9 @@ GLOBAL.SetOpenDropdownId = function (dropdownId) {
     GLOBAL.OpenDropdownId = dropdownId;
 };
 
-
-// Listen for click events to detect outside clicks
 (function () {
     window.addEventListener("click", function (e) {
         if (GLOBAL.OpenDropdownId && !document.getElementById(GLOBAL.OpenDropdownId).contains(e.target)) {
-            // Invoke HandleOutsideClick for the active dropdown
             GLOBAL.DotNetReferences[GLOBAL.OpenDropdownId].invokeMethodAsync('HandleOutsideClick', GLOBAL.OpenDropdownId);
             GLOBAL.OpenDropdownId = null; // Reset after the click
         }
@@ -33,38 +32,23 @@ GLOBAL.SetOpenDropdownId = function (dropdownId) {
 GLOBAL.RemoveDotnetReference = function (dropdownId) {
     delete GLOBAL.DotNetReferences[dropdownId];
 };
-// keep alongside your other GLOBAL helpers
+
 GLOBAL.SetOllamaRef = function (dotnetRef) { GLOBAL.OllamaRef = dotnetRef; };
-/*
-// Delegate clicks for injected /library/<model> links
-$(document).on('click', 'a[href^="/library/"]', function (e) {
-    // allow new-tab / modified clicks to behave normally
-    if (e.which === 2 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 
-    const href = $(this).attr('href');
-    const m = href && href.match(/^\/library\/([^?#/]+)$/); // captures deepseek-r1:latest
-    if (!m) return;
-
-    e.preventDefault();
-    const model = decodeURIComponent(m[1]);
-
-    if (GLOBAL.OllamaRef && typeof GLOBAL.OllamaRef.invokeMethodAsync === 'function') {
-        GLOBAL.OllamaRef.invokeMethodAsync('PullModelFromLink', model);
-        // optional: navigate after starting pull
-        // window.location.href = href;
-    } else {
-        console.warn('GLOBAL.OllamaRef not set');
-    }
-});*/
 GLOBAL.SetOllamaRef = function (dotnetRef) {
     GLOBAL.OllamaRef = dotnetRef;
 };
 
-window.GLOBAL.HighlightAllPrism = function () {
+(function () {
+    let t = null;
+    window.GLOBAL.HighlightAllPrism = function () {
+        if (t) clearTimeout(t);
+        t = setTimeout(function () {
+            if (window.Prism && Prism.highlightAll) Prism.highlightAll();
+        }, 200);
+    };
+})();
 
-    // no need for jQuery here unless you want DOM-ready
-    Prism.highlightAll();
-};
 
 window.GLOBAL.SetTheme = theme => {
     // using jQuery, since you prefer it:
@@ -133,14 +117,13 @@ window.GLOBAL.toastrInterop = {
     GLOBAL.OAuth.deliver = deliver;
     GLOBAL.OAuth.install = install;
 
-    // auto-install when DOM is ready
     $(install);
 })(window);
 
 
 
-
 document.addEventListener('DOMContentLoaded', () => {
+
     $(document).on("click", ".ollama-download", function (e) {
         // if the button is *inside* the <a>, do nothing, normal link works
         if ($(this).closest("a").length > 0) return;
@@ -246,31 +229,4 @@ document.addEventListener('DOMContentLoaded', () => {
         window.ai.scanThinks();
     };
 
-
-    // Any other jQuery .on('click') handlers that reference Blazor-rendered elements go here
-    /*$(document).off('click.ollama').on('click.ollama', 'a[href^="/library/"]', function (e) {
-        // allow new-tab / modified clicks to behave normally
-        if (e.which === 2 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-
-        const href = $(this).attr('href');
-        const m = href && href.match(/^\/library\/([^?#/]+)$/); // e.g. deepseek-r1:latest
-        if (!m) return;
-
-        e.preventDefault();
-
-        const model = decodeURIComponent(m[1]);
-
-        // per-link debounce: don’t fire twice rapidly
-        const $a = $(this);
-        if ($a.data('ollama-handled')) return;
-        $a.data('ollama-handled', true);
-        setTimeout(() => $a.removeData('ollama-handled'), 1500);
-
-        if (GLOBAL.OllamaRef && typeof GLOBAL.OllamaRef.invokeMethodAsync === 'function') {
-            console.log("Invoking PullModelFromLink for", model);
-            GLOBAL.OllamaRef.invokeMethodAsync('PullModelFromLink', model);
-        } else {
-            console.warn('GLOBAL.OllamaRef not set');
-        }
-    });*/
 });

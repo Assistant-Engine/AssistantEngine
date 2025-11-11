@@ -1,6 +1,7 @@
 ﻿
 using AssistantEngine.UI.Services.Implementation.Ingestion.Chunks;
 using AssistantEngine.UI.Services.Models.Ingestion;
+using AssistantEngine.UI.Services.Types;
 using Microsoft.SemanticKernel.Text;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
@@ -11,8 +12,8 @@ namespace AssistantEngine.UI.Services.Implementation.Ingestion;
 
 public class PDFDirectorySource(string sourceDirectory, bool includeSubdirectories) : IIngestionSource
 {
-    public event Action<string>? StatusMessage;
-    private void OnStatus(string msg) => StatusMessage?.Invoke(msg);
+   public event Action<string>? OnProgressMessage;
+    private void ProgressMessage(string msg, StatusLevel statusLevel = StatusLevel.Information) => OnProgressMessage?.Invoke(msg);
     public string SourceFileId(string fullPath)
        => Path
            .GetRelativePath(sourceDirectory, fullPath)
@@ -44,7 +45,7 @@ public class PDFDirectorySource(string sourceDirectory, bool includeSubdirectori
         foreach (var fullPath in sourceFiles)
         {
             var id = SourceFileId(fullPath);
-            OnStatus($"Ingesting {id}");
+            ProgressMessage($"Ingesting {id}");
             var version = SourceFileVersion(fullPath);
 
             if (existingById.TryGetValue(id, out var oldDoc))
@@ -87,7 +88,7 @@ public class PDFDirectorySource(string sourceDirectory, bool includeSubdirectori
         var deletedDocuments = existingDocuments.Where(d => !currentFileIds.Contains(d.DocumentId));
         foreach (var deleted in deletedDocuments)
         {
-            OnStatus($"Deleted {deleted.DocumentId}");
+            ProgressMessage($"Deleted {deleted.DocumentId}");
         }
         return Task.FromResult(deletedDocuments);
     }
@@ -96,7 +97,7 @@ public class PDFDirectorySource(string sourceDirectory, bool includeSubdirectori
     {
         using var pdf = PdfDocument.Open(Path.Combine(sourceDirectory, document.DocumentId));
         var paragraphs = pdf.GetPages().SelectMany(GetPageParagraphs).ToList();
-        OnStatus($"Reading {document.DocumentId}");
+        ProgressMessage($"Reading {document.DocumentId}");
 
         var chunks = paragraphs.Select(p => new IngestedTextChunk
         {

@@ -33,7 +33,7 @@
                 <dd class="penalty1-op-inner">
                     <InputText @bind-Value="conn.Id"
                                class="form-control"
-                               @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                               @oninput="(_) => {editedConnectors.Add(conn.Id);   MarkDirty?.Invoke();}" />
                 </dd>
 
         
@@ -68,7 +68,7 @@
                                    class="form-control mot2"
                                    placeholder="http://localhost:4001"
                                    disabled="@(!string.Equals(conn.ProviderKey, "custom", StringComparison.OrdinalIgnoreCase))"
-                                   @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                                   @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
                     </dd>
 
               
@@ -86,6 +86,7 @@
                         ValueChanged="@(v => {
                             if (!string.IsNullOrEmpty(v)) conn.Auth = Enum.Parse<AuthType>(v);
                             editedConnectors.Add(conn.Id);
+                             MarkDirty?.Invoke();
                             StateHasChanged();
                         })"
                         ShowImages="false"
@@ -111,7 +112,7 @@
                             <InputText @bind-Value="conn.AuthToken"
                                        class="form-control mot2"
                                        placeholder="Bearer xxx | api-key"
-                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                                       @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
                         </dd>
                     }
 
@@ -122,14 +123,14 @@
                         <dd>
                             <InputText @bind-Value="conn.ApiKeyHeaderName" class="form-control"
                                        placeholder="Authorization or X-API-Key"
-                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                                       @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
                         </dd>
 
                         <dt>Token / API Key</dt>
                         <dd>
                             <InputText @bind-Value="conn.AuthToken" class="form-control mot2"
                                        placeholder="Bearer xxx | api-key"
-                                       @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                                       @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
                         </dd>
                     }
 
@@ -254,7 +255,7 @@
                 <InputText @bind-Value="conn.OAuthClientId"
                            class="form-control"
                            placeholder="Your OAuth client_id"
-                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                    @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
             </dd>
 
             <dt>Client Secret</dt>
@@ -263,7 +264,7 @@
                            class="form-control"
                            type="password"
                            placeholder="Your OAuth client_secret"
-                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                           @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
             </dd>
         }
 
@@ -281,7 +282,7 @@
                 <InputText @bind-Value="conn.OAuthAuthUrl"
                            class="form-control"
                            placeholder="https://.../authorize"
-                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                           @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
             </dd>
 
             <dt>Token URL</dt>
@@ -289,14 +290,14 @@
                 <InputText @bind-Value="conn.OAuthTokenUrl"
                            class="form-control"
                            placeholder="https://.../token"
-                           @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                  @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
             </dd>
                 <dt>Scopes</dt>
                 <dd>
                     <InputText @bind-Value="conn.OAuthScopes"
                                class="form-control"
                                placeholder="openid profile email (space separated)"
-                               @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                              @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
                 </dd>
 
                 <dt>Redirect URL</dt>
@@ -304,7 +305,7 @@
                     <InputText @bind-Value="conn.OAuthRedirectUrl"
                                class="form-control"
                                placeholder="(optional) e.g. http://127.0.0.1:51789/oauth/callback"
-                               @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                           @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
                 </dd>
 
                 @* For PublicPkce you may optionally expose Client Id here if you want it editable *@
@@ -315,7 +316,7 @@
                         <InputText @bind-Value="conn.OAuthClientId"
                                    class="form-control"
                                    placeholder="Defaults to provider's default or 'assistant-engine'"
-                                   @oninput="(_) => editedConnectors.Add(conn.Id)" />
+                                   @oninput="(_) => {editedConnectors.Add(conn.Id);MarkDirty?.Invoke();}" />
                     </dd>
                 }
             </div>
@@ -390,36 +391,36 @@
 
 
 
-protected override async Task OnInitializedAsync()
-{
-    var all = await ProviderCatalog.GetAllAsync();
-    _providers = all.Where(IsSupportedProvider).ToList();
-    _providersReady = true;
-
-    NormalizeProviderKeys();  
-    StateHasChanged();
-}
-private void NormalizeProviderKeys() 
-{
-    if (AssistantConfig?.McpConnectors is null || _providers is null) return;
-
-    foreach (var conn in AssistantConfig.McpConnectors)
+    protected override async Task OnInitializedAsync()
     {
-        if (string.IsNullOrWhiteSpace(conn.ProviderKey)) continue;
+        var all = await ProviderCatalog.GetAllAsync();
+        _providers = all.Where(IsSupportedProvider).ToList();
+        _providersReady = true;
 
-        var match = _providers.FirstOrDefault(p =>
-            string.Equals(p.key,  conn.ProviderKey, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(p.name, conn.ProviderKey, StringComparison.OrdinalIgnoreCase));
-
-        if (match is not null)
-            conn.ProviderKey = match.key; // force exact key casing used by Items
+        NormalizeProviderKeys();  
+        StateHasChanged();
     }
-}
+    private void NormalizeProviderKeys() 
+    {
+        if (AssistantConfig?.McpConnectors is null || _providers is null) return;
 
-protected override void OnParametersSet()
-{
-    if (_providersReady) NormalizeProviderKeys(); 
-}
+        foreach (var conn in AssistantConfig.McpConnectors)
+        {
+            if (string.IsNullOrWhiteSpace(conn.ProviderKey)) continue;
+
+            var match = _providers.FirstOrDefault(p =>
+                string.Equals(p.key,  conn.ProviderKey, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(p.name, conn.ProviderKey, StringComparison.OrdinalIgnoreCase));
+
+            if (match is not null)
+                conn.ProviderKey = match.key; // force exact key casing used by Items
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_providersReady) NormalizeProviderKeys(); 
+    }
 
     void DumpAuthDebug(McpConnectorConfig conn, string prefix)
     {
@@ -438,27 +439,27 @@ protected override void OnParametersSet()
 
 
 
-        protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_didInitialHydrate)
         {
-            if (!_didInitialHydrate)
+            _didInitialHydrate = true;
+
+            ClientState.RefreshTools();
+
+            _hydrating = true; // add
+            if (AssistantConfig?.McpConnectors != null)
             {
-                _didInitialHydrate = true;
-
-                ClientState.RefreshTools();
-
-                _hydrating = true; // add
-                if (AssistantConfig?.McpConnectors != null)
-                {
-                    foreach (var conn in AssistantConfig.McpConnectors)
-                        await DiscoverTools(conn, markEdited: false); // changed
-                }
-                _hydrating = false; // add
-
-                StateHasChanged();
+                foreach (var conn in AssistantConfig.McpConnectors)
+                    await DiscoverTools(conn, markEdited: false); // changed
             }
-            Current = this;
-            await base.OnAfterRenderAsync(firstRender);
+            _hydrating = false; // add
+
+            StateHasChanged();
         }
+        Current = this;
+        await base.OnAfterRenderAsync(firstRender);
+    }
 
     void OpenToolModal(string id)
     {
@@ -484,45 +485,46 @@ protected override void OnParametersSet()
             editingConnectors.Remove(conn.Id);
     }
     private IEnumerable<StandardDropdown.DropOption> ProviderDropdownOptions
-{
-    get
     {
-        if (_providers is null) return Array.Empty<StandardDropdown.DropOption>();
+        get
+        {
+            if (_providers is null) return Array.Empty<StandardDropdown.DropOption>();
 
-        var list = _providers.ToList(); // preserve original order
-        var anyLogo = list.Any(p => !string.IsNullOrWhiteSpace(p.logo));
+            var list = _providers.ToList(); // preserve original order
+            var anyLogo = list.Any(p => !string.IsNullOrWhiteSpace(p.logo));
 
-        var ordered = anyLogo
-            ? list.OrderBy(p => string.IsNullOrWhiteSpace(p.logo) ? 1 : 0).ToList() // logos first (stable)
-            : list;
+            var ordered = anyLogo
+                ? list.OrderBy(p => string.IsNullOrWhiteSpace(p.logo) ? 1 : 0).ToList() // logos first (stable)
+                : list;
 
-        return ordered.Select(p => new StandardDropdown.DropOption
+            return ordered.Select(p => new StandardDropdown.DropOption
         {
             Key = p.key,
             Label = p.name,
             ImageUrl = string.IsNullOrWhiteSpace(p.logo) ? null : $"_content/AssistantEngine.UI/{p.logo}"
         });
+        }
     }
-}
 
     private bool IsEditing(McpConnectorConfig conn) => editingConnectors.Contains(conn.Id);
 
     private void MarkEdited(McpConnectorConfig c) => editedConnectors.Add(c.Id);
 
-  private async void OnProviderChanged(McpConnectorConfig conn, string? value)
-{
-    if (string.IsNullOrWhiteSpace(value))
-        return;             
+    private async void OnProviderChanged(McpConnectorConfig conn, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return;             
 
-    conn.ProviderKey = value;
+        conn.ProviderKey = value;
 
-    var p = _providers?
-        .FirstOrDefault(x => string.Equals(x.key, conn.ProviderKey, StringComparison.OrdinalIgnoreCase)); // changed
+        var p = _providers?
+            .FirstOrDefault(x => string.Equals(x.key, conn.ProviderKey, StringComparison.OrdinalIgnoreCase)); // changed
 
-    if (p is not null) conn.PrefillFromProvider(p);
-    editedConnectors.Add(conn.Id);
-    StateHasChanged();
-}
+        if (p is not null) conn.PrefillFromProvider(p);
+        editedConnectors.Add(conn.Id);
+        StateHasChanged();
+        MarkDirty?.Invoke();
+    }
 
 
 
@@ -553,6 +555,7 @@ protected override void OnParametersSet()
         McpRegistry.Remove(conn.Id);
         connectorTools.Remove(conn.Id);
         ClientState.StatusMessage($"Connector {conn.Id} removed.");
+        MarkDirty?.Invoke();
     }
 
     private async Task<bool> PreflightAsync(McpConnectorConfig conn)
@@ -622,13 +625,11 @@ protected override void OnParametersSet()
         MarkEdited(c);
     }
 
-   private async Task SaveConnector(McpConnectorConfig conn) // changed: Task
+   private async Task SaveConnector(McpConnectorConfig conn)
     {
         editedConnectors.Remove(conn.Id);
         ClientState.RefreshTools();
-        ClientState.StatusMessage($"Connector {conn.Id} saved.");
-
-        MarkDirty?.Invoke();                         
+        MarkDirty?.Invoke();        
         if (SaveAssistantAsync is not null)
             await SaveAssistantAsync();            
     }

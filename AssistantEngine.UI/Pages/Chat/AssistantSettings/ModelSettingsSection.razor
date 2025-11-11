@@ -13,10 +13,8 @@
                     @onclick="() => ToggleModel(item.Key)"
                     style="cursor: pointer; display: flex; align-items: center;">
                     <i class="fi fi-br-info me-1 fs-6 align-text-bottom text-muted"
-                       title='@(item.Key == "Embedding"
-                                                                                                                 ? "It is not advisable to change this as it will require re-embedding vector store"
-                                                                                                                 : "")'>
-                </i>
+                       title='@(item.Key == "Embedding"? "It is not advisable to change this as it will require re-embedding vector store": "")'>
+                   </i>
                 <span>@item.Label</span>
                 <i class="fi fi-br-angle-@(_expanded.Contains(item.Key) ? "up" : "down") ms-auto"></i>
             </dt>
@@ -32,10 +30,9 @@
 
                                     Model Id
                                 </label>
-                                <ModelDropdown OnSelect="@(async selected =>
-                                                                                                                                                                        {
+                                <ModelDropdown OnSelect="@(async selected =>{
                                                    item.Options.ModelId = selected.Name;
-                                                   
+                                                   MarkDirty?.Invoke();
                                                    await OnStateChange.InvokeAsync();
                                                })"
                                                  SelectedModel="@item.Options.ModelId" />
@@ -51,6 +48,7 @@
                                     <input type="range"
                                            @bind="item.Options.Temperature"
                                            min="0" max="1" step="0.1"
+                                           @oninput="(_) => MarkDirty?.Invoke()"
                                            class="form-range flex-grow-1 range-temp" />
                                     <span id="temp-option-num" class="ms-2">@item.Options.Temperature</span>
                                 </div>
@@ -63,6 +61,7 @@
                                     Top P
                                 </label>
                                 <InputNumber @bind-Value="item.Options.TopP"
+                                            @oninput="(_) => MarkDirty?.Invoke()"
                                              class="form-control"
                                              step="0.01"
                                              placeholder="default" />
@@ -75,6 +74,7 @@
                                     Top K
                                 </label>
                                 <InputNumber @bind-Value="item.Options.TopK"
+                                             @oninput="(_) => MarkDirty?.Invoke()"
                                              class="form-control"
                                              step="1"
                                              placeholder="default" />
@@ -87,6 +87,7 @@
                                     Max Output Tokens
                                 </label>
                                 <InputNumber @bind-Value="item.Options.MaxOutputTokens"
+                                             @oninput="(_) => MarkDirty?.Invoke()"
                                              class="form-control"
                                              placeholder="unlimited" />
                             </div>
@@ -98,6 +99,7 @@
                                     Presence Penalty
                                 </label>
                                 <InputNumber @bind-Value="item.Options.PresencePenalty"
+                                             @oninput="(_) => MarkDirty?.Invoke()"
                                              class="form-control"
                                              step="0.1"
                                              placeholder="0" />
@@ -110,6 +112,7 @@
                                     Frequency Penalty
                                 </label>
                                 <InputNumber @bind-Value="item.Options.FrequencyPenalty"
+                                             @oninput="(_) => MarkDirty?.Invoke()"
                                              class="form-control"
                                              step="0.1"
                                              placeholder="0" />

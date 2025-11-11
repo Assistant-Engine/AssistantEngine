@@ -10,7 +10,7 @@
 @using System.Text.RegularExpressions
 @inject OllamaImportService ModelService
 @inject IAppHealthService Health
-
+@inject IModelInstaller Installer
 @inject IModelCache ModelCache
 @if (loading)
 {
@@ -18,7 +18,7 @@
 }
 else
 {
-    <div id="ollama-import-page" class="ollama-page">
+    <div id="ollama-install-page" class="ollama-page">
         <div class="ollama-import-header nav-top">
             <h4 class="ollama-import-title">
                 Download Models
@@ -33,9 +33,9 @@ else
         </div>
 
         <div class="ollama-split">
-            <!-- LEFT: searchable list -->
             <aside class="ollama-left">
                 <div class="search-box">
+                    <i class="fi fi-br-search"></i>
                     <input class="form-control ollama-install-search" placeholder="Search models…" @bind="search" @bind:event="oninput" />
                 </div>
 
@@ -49,25 +49,36 @@ else
                 }
                 else
                 {
-                <ul class="model-list-nav">
-                    @foreach (var m in FilteredModels)
+
+                    @if (!FilteredModels.ToList().Any())
                     {
-                        var selected = ReferenceEquals(SelectedModel, m) ? "selected" : "";
-                        <li class="model-list-item @selected" @onclick="@(() => SelectModel(m))" title="@m.Description">
-                            <div class="model-name-row">
-                                <span class="model-name">@m.Name</span>
-                                @if (IsInstalled(m))
-                                {
-                                    <span class="badge installed">Installed</span>
-                                }
-                            </div>
-                            @if (!string.IsNullOrWhiteSpace(m.Description))
-                            {
-                                <div class="model-desc-trunc">@m.Description</div>
-                            }
-                        </li>
+                        <div class="empty-note">
+                            No models match your search.
+                        </div>
                     }
-                </ul>
+                    else
+                    {
+                        <ul class="model-list-nav">
+                            @foreach (var m in FilteredModels)
+                            {
+                                var selected = ReferenceEquals(SelectedModel, m) ? "selected" : "";
+                                <li class="model-list-item @selected" @onclick="@(() => SelectModel(m))" title="@m.Description">
+                                    <div class="model-name-row">
+                                        <span class="model-name">@m.Name</span>
+                                        @if (IsInstalled(m))
+                                        {
+                                            <span class="badge installed">Installed</span>
+                                        }
+                                    </div>
+                                    @if (!string.IsNullOrWhiteSpace(m.Description))
+                                    {
+                                        <div class="model-desc-trunc">@m.Description</div>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+       
                 }
             </aside>
 
@@ -145,8 +156,9 @@ else
     private string? _loadError;
     private string search = "";
     private ConfigDropdown @configDD;
+    private readonly CancellationTokenSource cts = new();
+    private DotNetObjectReference<OllamaInstall>? _selfRef;
 
-    IOllamaApiClient Client => ClientState.OllamaClient;
 
     protected override async Task OnInitializedAsync()
     {
@@ -238,4 +250,14 @@ else
         if (bytes >= 1_000) return $"{bytes / 1_000.0:F2} KB";
         return $"{bytes} B";
     }
+
+
+    [JSInvokable]
+    public Task PullModelFromLink(string model)
+    {
+        _ = Task.Run(() => Installer.PullAsync(model, cts.Token));
+        return Task.CompletedTask;
+    }
+    public void Dispose() => _selfRef?.Dispose();
+
 }

@@ -561,7 +561,7 @@ html[data-theme="dark"] #inner-logo-main{
   background: inherit;
 }
 .modal-header{ position: sticky; top: 0; z-index: 1; display:flex;}
-.modal-footer{ position: sticky; bottom: 0; z-index: 1; display:none; }
+.modal-footer{ position: sticky; bottom: 0; z-index: 1; display:flex; }
 
 /* Scrollable body (caps total height) */
 .modal-body{
@@ -569,6 +569,9 @@ html[data-theme="dark"] #inner-logo-main{
   padding: var(--modal-pad);    padding-top:0px;
   max-height: calc(100vh - 12rem); /* header+footer+margin */
   overflow: auto;
+}
+.modal-footer > button:first-of-type{
+    margin-left:0px;
 }
 
 /* Enter/exit (works with .fade .show) */
@@ -685,7 +688,7 @@ body.modal-open{ overflow: hidden; }
     height: 2.2rem;
     padding: 0.35rem 0.6rem;
     font-size: 0.9rem;
-    border-radius: 4px;
+    border-radius: 7px;
     border: 1px solid var(--border-primary);
     transition: border-color 0.2s;
 }
@@ -1135,11 +1138,11 @@ body.modal-open{ overflow: hidden; }
 }
 
 .ae-evals__loading, .ae-evals__empty {
-    padding: 16px;
-    opacity: .8;
+    padding: 12px 16px;
+ 
 }
 
-.ae-evals__table thead tr {
+.ae-evals__table thead tr, .models-table thead tr{
     border-bottom: solid 1px;
     border-color: var(--border-light);
 }
@@ -1528,11 +1531,32 @@ table.ae-evals__table tr:nth-child(even),
 table.models-table tr:nth-child(even) {
     background-color: rgba(255, 255, 255, 0.02); /* subtle tint for dark mode */
 }
+.search-box  { position: relative;}
+.search-box > i {
+  position: absolute; 
+    left: 10px; top: 50%;
+    font-size:0.9rem;
+    margin-top:1px;
+   color:var(--text-secondary);
+  transform: translateY(-50%); pointer-events: none; opacity: .7;
+}
+.nav-top .search-box{
+    margin-left:1.2rem;
+    max-width:200px;
+    font-size:0.8rem !important;
+}
+.nav-top .search-box .form-control{font-size:0.8rem; padding:0.25rem 0.75rem; padding-left:2rem; height:fit-content;}
+.search-box > input { padding-left: 2rem; }
 
-.form-control.ollama-install-search {
+.search-box {
     margin: 10px;
     width: calc(100% - 20px)
 }
+.server-config-text{
+        align-content: center;
+    align-items: center;
+}
+
 
 
 table.ae-evals__table tr:hover,
@@ -1593,9 +1617,10 @@ table.ae-evals__table tr th,
 .model-name-row {
     display: flex;
     padding: 10px 14px;
+    font-size:0.95rem;
 }
 
-#ollama-import-page #configToggle {
+#configToggle {
     margin-top: -2px;
     margin-left: 10px;
 }
@@ -1758,8 +1783,14 @@ div.ae-details__grid input[type=datetime-local] {
 .model-list-item.selected {
     background-color: var(--model-item-selected) !important;
 }
-
-#ollama-import-page {
+.empty-note{   opacity: .8;
+    font-size:0.9rem;
+}
+#ollama-install-page .empty-note{
+    background-color: rgba(255, 255, 255, 0.02);
+    padding: 10px 16px;
+}
+#ollama-import-page,#ollama-install-page {
     flex-grow: 1;
 }
 
@@ -2155,9 +2186,6 @@ span.group-hover\:underline {
     justify-content: center;
 }
 
-.message-list-container {
-    /*  min-height:500px;*/
-}
 
 .custom-modal {
     position: fixed;
@@ -2267,15 +2295,17 @@ html[data-theme="dark-old"] #sidebarText {
     flex: 1;
     flex-grow: 1;
 }
+#chat-container-outer,
+.chat-container-inner { overflow: visible; }
 
 .chat-container-inner {
-    position: relative;
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    flex-grow: 1;
-    max-height: 100vh;
-    overflow-y: scroll;
+  position: relative;         /* optional */
+  display: flex;
+  flex-direction: column;
+  flex: 1;                    /* or: flex-grow: 1 */
+  min-height: 0;              /* important so child can scroll */
+  overflow: visible;  
+      height: 100%;/* scrolling handled by <chat-messages> */
 }
 
 .assistant-message-icon {
@@ -3107,17 +3137,47 @@ html[data-theme="dark"] .btn-subtle:hover {
     background-color: var(--chat-container-row);
     filter: brightness(1.2);
 }
+chat-messages.message-list {
+   display:block;                 /* or flex; either is fine */
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto !important;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;       /* keeps space for the bar */
+}
+.message-list-inner {
+    margin-top:2rem !important;
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* space between messages */
+    padding: 12px 16px 24px; /* bottom pad so last msg isn't flush */
+    margin-inline: auto;
+    width: 100%;
+    max-width: var(--page-width, 900px);
+    box-sizing: border-box;
+    /* important: this element must NOT scroll */
+    overflow: visible;
+    /* keep long text/urls from breaking layout */
+    word-break: break-word;
+}
+
+    /* optional: ensure each message stretches full width */
+    .message-list-inner > * {
+        align-self: stretch;
+    }
+
 
 .page-width {
     max-width: 1024px;
     margin: auto;
 }
-
 #chat-completion-info {
+    margin-left:2rem;
+    width:calc(100% - 2rem);
     display: flex;
     flex-wrap: wrap;
     gap: 10px; /* Adjust spacing between config items */
-    padding: 15px;
+    padding: 15px 0px;
     border-top: 1px solid #eeeeee63; /* Subtle separator */
 }
 

@@ -1,4 +1,5 @@
 ﻿using AssistantEngine.UI.Services.Models.Ingestion;
+using AssistantEngine.UI.Services.Types;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -13,8 +14,8 @@ namespace AssistantEngine.UI.Services.Implementation.Ingestion;
 
 public class CSDirectorySource(string sourceDirectory, bool includeSubdirectories) : IIngestionSource
 {
-    public event Action<string>? StatusMessage;
-    private void OnStatus(string msg) => StatusMessage?.Invoke(msg);
+   public event Action<string>? OnProgressMessage;
+    private void ProgressMessage(string msg, StatusLevel statusLevel = StatusLevel.Information) => OnProgressMessage?.Invoke(msg);
     public string SourceFileId(string fullPath)
        => Path
            .GetRelativePath(sourceDirectory, fullPath)
@@ -46,7 +47,7 @@ public class CSDirectorySource(string sourceDirectory, bool includeSubdirectorie
         foreach (var fullPath in sourceFiles)
         {
             var id = SourceFileId(fullPath);
-            OnStatus($"Ingesting {id}");
+            ProgressMessage($"Ingesting {id}");
             var version = SourceFileVersion(fullPath);
 
             if (existingById.TryGetValue(id, out var oldDoc))
@@ -93,7 +94,7 @@ public class CSDirectorySource(string sourceDirectory, bool includeSubdirectorie
         var deletedDocuments = existingDocuments.Where(d => !currentFileIds.Contains(d.DocumentId));
         foreach (var deleted in deletedDocuments)
         {
-            OnStatus($"Deleted {deleted.DocumentId}");
+            ProgressMessage($"Deleted {deleted.DocumentId}");
         }
         return Task.FromResult(deletedDocuments);
     }
@@ -102,7 +103,7 @@ public class CSDirectorySource(string sourceDirectory, bool includeSubdirectorie
     {
         
         var filePath = Path.Combine(sourceDirectory, document.DocumentId);
-        OnStatus($"Reading {document.DocumentId}");
+        ProgressMessage($"Reading {document.DocumentId}");
         var codeText = await File.ReadAllTextAsync(filePath);
         return GetEnhancedChunks(codeText, documentId: document.DocumentId, filePath: filePath);
 

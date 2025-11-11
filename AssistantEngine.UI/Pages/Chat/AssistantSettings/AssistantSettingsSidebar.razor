@@ -8,6 +8,7 @@
 @using AssistantEngine.UI.Services.Implementation.MCP
 @using AssistantEngine.UI.Services.Implementation.Tools
 @using AssistantEngine.UI.Services.Models
+@using AssistantEngine.UI.Services.Types
 @using Microsoft.AspNetCore.Http
 @using Microsoft.Extensions.AI
 @using System.Text.Json
@@ -20,9 +21,9 @@
 @inject ChatClientState clientState;
 
 @if (showSidebar) //dont neccessarily need this here currently but is good for if we want to have hide here in future maybe
-{
+{//OnSubmit="SaveAssistant"
     <aside class="chat-options-sidebar">
-        <EditForm EditContext="_editContext">
+        <EditForm Model="AssistantConfig">
             <h3 class="nav-top">
                 <span>Assistant</span>
                 @if (isDirty)
@@ -81,18 +82,22 @@
                 </dl>
 
             </section>
-            <CascadingValue Value="AssistantConfig">
+
+            <CascadingValue Name="AssistantConfig" Value="AssistantConfig">
                 <CascadingValue Name="SaveAssistant" Value="(Func<Task>)SaveAssistant">
-                    <CascadingValue Name="MarkDirty" Value="(Action)(() => isDirty = true)">
-                        <ModelServerSection />
-                        <ModelSettingsSection />
-                        <SystemSettingsSection />
-                        <IngestionSettingsSection />
-                        <DatabaseSettingsSection />
-                        <McpSettingsSection />
+                    <CascadingValue Name="MarkDirty" Value="(Action)(() =>{isDirty = true;InvokeAsync(StateHasChanged);})">
+                            <CascadingValue Name="RequestRefresh" Value="(Func<Task>)(async () => await OnStateChange.InvokeAsync())">
+                                <ModelServerSection />
+                                <ModelSettingsSection />
+                                <SystemSettingsSection />
+                                <IngestionSettingsSection />
+                                <DatabaseSettingsSection />
+                                <McpSettingsSection />
+                            </CascadingValue>
                     </CascadingValue>
                 </CascadingValue>
             </CascadingValue>
+
             
          
             <section>
@@ -151,17 +156,13 @@
         showSidebar = !showSidebar;
     }
     private string? _originalId;
-    private EditContext? _editContext;
+
     private bool isDirty;
 
     private void HandleFieldChanged(object? sender, FieldChangedEventArgs e)
         => isDirty = true;
     protected override void OnParametersSet()
     {
-        if (_editContext?.Model != AssistantConfig)
-        {
-            RebindEditContext();
-        }
 
         if (string.IsNullOrWhiteSpace(_originalId) && !string.IsNullOrWhiteSpace(AssistantConfig?.Id))
             _originalId = AssistantConfig.Id;
@@ -176,7 +177,7 @@
 
             // Do NOT change Id here. Save name-only change.
             await ConfigStore.UpdateAsync(_originalId!, AssistantConfig);
-            await clientState.ChangeModelAsync(AssistantConfig.Id);
+            await clientState.ChangeModelAsync(AssistantConfig.Id, StatusLevel.Error);
             _originalId = AssistantConfig.Id;
 
             clientState.StatusMessage("Model saved successfully");
@@ -190,33 +191,22 @@
             clientState.StatusMessage($"Save failed: {ex.Message}");
         }
     }
-    // ADD THIS helper
-    private void RebindEditContext()
-    {
-        if (_editContext != null) _editContext.OnFieldChanged -= HandleFieldChanged;
-        _editContext = new EditContext(AssistantConfig);
-        _editContext.OnFieldChanged += HandleFieldChanged;
-        isDirty = false;
-    }
-  
+
 
 
     private async Task ReloadFromStoreAsync(string id)
     {
         var fresh = ConfigStore.GetById(id) ?? ConfigStore.GetAll().FirstOrDefault();
         if (fresh is null) return;
-
-        AssistantConfig = fresh.Clone();   // or store already returns a copy
-        RebindEditContext();               // <-- single place that handles it
+        AssistantConfig = fresh.Clone();
+        isDirty = false;
         await InvokeAsync(StateHasChanged);
     }
     private async Task DiscardChanges()
     {
         var id = string.IsNullOrWhiteSpace(_originalId) ? AssistantConfig.Id : _originalId;
-        await ReloadFromStoreAsync(id);    // this already rebinds + clears isDirty
-        // inside DiscardChanges, after ReloadFromStoreAsync:
-        await clientState.ChangeModelAsync(id);
-
+        await ReloadFromStoreAsync(id);    
+        await clientState.ChangeModelAsync(id, StatusLevel.Error);
         clientState.StatusMessage("Changes discarded.");
     }
 
@@ -242,7 +232,6 @@
         await clientState.ChangeModelAsync(id);
         AssistantConfig = cfg;
         _originalId = id;
-        RebindEditContext();
         await OnStateChange.InvokeAsync();
         StateHasChanged();
     }
@@ -260,7 +249,6 @@
         await clientState.ChangeModelAsync(newId);
         AssistantConfig = clone;
         _originalId = newId;
-        RebindEditContext();
         await OnStateChange.InvokeAsync();
         StateHasChanged();
     }
@@ -316,8 +304,7 @@
 
         await clientState.ChangeModelAsync(next.Id);
         AssistantConfig = next.Clone();
-        _originalId = next.Id;
-        RebindEditContext();                 
+        _originalId = next.Id;       
         showMore = false;
     }
 

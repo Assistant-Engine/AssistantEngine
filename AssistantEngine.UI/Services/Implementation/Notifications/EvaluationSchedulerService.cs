@@ -79,7 +79,7 @@ public sealed class EvaluationSchedulerService : BackgroundService
                         break;
 
                     default: // Error
-                        _notifier.StatusMessage($"❌ Evaluation error: {eval.Id}");
+                        _notifier.StatusMessage($"❌ Evaluation error: {eval.Id}", Types.StatusLevel.Error);
                         eval.NextCheckUtc = now.AddSeconds(DefaultDeferSeconds);
                         eval.State = EvalState.Pending;
                         break;

@@ -1,7 +1,9 @@
-﻿@using AssistantEngine.UI.Services.Implementation.Notifications
+﻿@using AssistantEngine.UI.Services
+@using AssistantEngine.UI.Services.Implementation.Notifications
 @using AssistantEngine.UI.Services.Notifications
 @inject IJSRuntime JS
 @inject IEvaluationStore Store
+@inject IModalService Modal
 
 <div class="ae-evals">
     <div class="ae-evals__header nav-top">
@@ -22,7 +24,7 @@ class=
     }
     else if (items.Count == 0)
     {
-        <div class="ae-evals__empty">No evaluations.</div>
+        <div class="ae-evals__empty empty-note">No evaluations.</div>
     }
     else
     {
@@ -352,8 +354,8 @@ class=
 
     private async Task Delete(string id)
     {
-        var ok = await JS.InvokeAsync<bool>("confirm", "Delete this evaluation?");
-        if (!ok) return;
+        if (!await Modal.ConfirmAsync($"Are you sure you want to delete evaluation with id:{id}?", "Delete Evaluation", "Delete", "Cancel", "small"))
+         return;
         await Store.DeleteAsync(id);
         await Load();
     }

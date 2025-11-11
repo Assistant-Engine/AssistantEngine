@@ -1,6 +1,7 @@
 ﻿
 using AssistantEngine.UI.Services.Implementation.Ingestion.Chunks;
 using AssistantEngine.UI.Services.Models.Ingestion;
+using AssistantEngine.UI.Services.Types;
 using Microsoft.SemanticKernel.Text;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -9,8 +10,8 @@ namespace AssistantEngine.UI.Services.Implementation.Ingestion;
 
 public sealed class GeneralDirectorySource : IIngestionSource
 {
-    public event Action<string>? StatusMessage;
-    private void OnStatus(string msg) => StatusMessage?.Invoke(msg);
+    public event Action<string>? OnProgressMessage;
+    private void ProgressMessage(string msg) => OnProgressMessage?.Invoke(msg);
 
     private readonly string _sourceDirectory;
     private readonly bool _includeSubdirectories;
@@ -83,7 +84,7 @@ public sealed class GeneralDirectorySource : IIngestionSource
         {
             var id = SourceFileId(fullPath);
             var version = SourceFileVersion(fullPath);
-            OnStatus($"Ingesting {id}");
+            ProgressMessage($"Ingesting {id}");
 
             if (existingById.TryGetValue(id, out var oldDoc))
             {
@@ -120,16 +121,16 @@ public sealed class GeneralDirectorySource : IIngestionSource
         var current = EnumerateFiles().ToLookup(SourceFileId);
         var deleted = existingDocuments.Where(d => !current.Contains(d.DocumentId)).ToList();
         foreach (var d in deleted)
-            OnStatus($"Deleted {d.DocumentId}");
+            ProgressMessage($"Deleted {d.DocumentId}");
         return Task.FromResult((IEnumerable<IngestedDocument>)deleted);
     }
 
     public async Task<IEnumerable<IIngestedChunk>> CreateChunksForDocumentAsync(IngestedDocument document)
     {
         var fullPath = Path.Combine(_sourceDirectory, document.DocumentId);
-        OnStatus($"Reading {document.DocumentId}");
+        ProgressMessage($"Reading {document.DocumentId}");
 
-        // Read as UTF-8 (with BOM support); if fails, fall back to default encoding.
+        
         string raw;
         try
         {

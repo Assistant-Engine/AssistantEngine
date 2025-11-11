@@ -35,8 +35,8 @@
     <PackageReference Include="Microsoft.SqlServer.DacFx.x64" Version="150.5282.3" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="OllamaSharp" Version="5.4.8" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="9.10.1" />
-    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.66.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.10.2" />
+    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="1.67.1" />
     <PackageReference Include="PdfPig" Version="0.1.11" />
     <PackageReference Include="Scrutor" Version="6.1.0" />
     <PackageReference Include="System.Configuration.ConfigurationManager" Version="9.0.10" />

@@ -1,4 +1,9 @@
 ﻿using AssistantEngine.UI.Pages.Chat;
+using AssistantEngine.UI.Services.Implementation.Database;
+using AssistantEngine.UI.Services.Implementation.Factories;
+using AssistantEngine.UI.Services.Models;
+using AssistantEngine.UI.Services.Models.Ingestion;
+using AssistantEngine.UI.Services.Types;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -12,10 +17,6 @@ using UglyToad.PdfPig;
 using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.PageSegmenter;
 using UglyToad.PdfPig.DocumentLayoutAnalysis.WordExtractor;
-using AssistantEngine.UI.Services.Implementation.Database;
-using AssistantEngine.UI.Services.Implementation.Factories;
-using AssistantEngine.UI.Services.Models.Ingestion;
-using AssistantEngine.UI.Services.Models;
 
 namespace AssistantEngine.UI.Services.Implementation.Ingestion;
 
@@ -23,22 +24,11 @@ namespace AssistantEngine.UI.Services.Implementation.Ingestion;
 // IDatabase can be registered with a desciption model
 public class DatabaseIngestionSource(IDatabase database, ChatClientFactory chatClientFactory, AssistantConfig config) : IIngestionSource
 {
-
-    //so here document id refers to the database name + table name so document id refers to a table.
-    //but how many chunks should a table actually contain?
-    //a one to one mapping might be fine.
-
-
-    //if document id was the whole database
-    //it would reingest the whole database every time
-
-
+   public event Action<string>? OnProgressMessage;
+    private void ProgressMessage(string msg, StatusLevel statusLevel = StatusLevel.Information) => OnProgressMessage?.Invoke(msg);
     public bool DescribeTablesWithAI { get; set; } = database.Configuration.DescribeDatabaseWithModel; //if true, will use AI to describe the tables
 
     public IChatClient descriptorClient { get; private set; } = chatClientFactory(config.DescriptorModel.ModelId);
-
-    public event Action<string>? StatusMessage;
-    private void OnStatus(string msg) => StatusMessage?.Invoke(msg);
     public string SourceFileId(string tableName)
        => database.Configuration.Id + "."+tableName;
     public static string SourceTableVersion(TableSchema schema) => schema.Fields.Count().ToString();
@@ -65,7 +55,7 @@ public class DatabaseIngestionSource(IDatabase database, ChatClientFactory chatC
         foreach (var table in allTables)
         {
             var id = SourceFileId(table.Key);
-            OnStatus($"Ingesting {id}");
+            ProgressMessage($"Ingesting {id}");
             var version = SourceTableVersion(table.Value);
 
             if (existingById.TryGetValue(id, out var oldDoc))
@@ -110,7 +100,7 @@ public class DatabaseIngestionSource(IDatabase database, ChatClientFactory chatC
         var deletedDocuments = existingDocuments.Where(d => !currentFileIds.Contains(d.DocumentId));
         foreach (var deleted in deletedDocuments)
         {
-            OnStatus($"Deleted {deleted.DocumentId}");
+            ProgressMessage($"Deleted {deleted.DocumentId}");
         }
         return Task.FromResult(deletedDocuments);
     }
@@ -121,7 +111,7 @@ public class DatabaseIngestionSource(IDatabase database, ChatClientFactory chatC
         {
             var currentTables = database.GetSqlSchema();
             //var filePath = Path.Combine(sourceDirectory, document.DocumentId);
-            OnStatus($"Reading Table {document.DocumentId}");
+            ProgressMessage($"Reading Table {document.DocumentId}");
 
             var correctTable = currentTables.Where(x => $"{SourceId}.{x.Key}" == document.DocumentId);
 

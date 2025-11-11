@@ -58,7 +58,7 @@
 		<AppxSymbolPackageEnabled>False</AppxSymbolPackageEnabled>
 		<GenerateTestArtifacts>True</GenerateTestArtifacts>
 		<PackageCertificateThumbprint>145b7d2d8962cdb9611c6c7bb9cd4c2cac6156bb</PackageCertificateThumbprint>
-		<AppInstallerUri>https://assistant/downloads/</AppInstallerUri>
+		<AppInstallerUri>https://assistantengine.ai/downloads/</AppInstallerUri>
 		<HoursBetweenUpdateChecks>0</HoursBetweenUpdateChecks>
 	</PropertyGroup>
 
@@ -67,7 +67,6 @@
 		<WindowsPackageType>None</WindowsPackageType>
 		<WindowsEnableConsole>true</WindowsEnableConsole>
 	</PropertyGroup>
-
 	<PropertyGroup Condition="'$(Configuration)'=='Release'">
 		<WindowsPackageType>MSIX</WindowsPackageType>
 		<WindowsEnableConsole>true</WindowsEnableConsole>

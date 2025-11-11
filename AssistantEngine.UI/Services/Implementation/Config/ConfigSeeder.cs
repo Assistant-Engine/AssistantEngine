@@ -31,7 +31,7 @@ namespace AssistantEngine.UI.Services.Implementation.Config
                             n.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 .ToList();
 
-            var overwriteDuplicates = true; // true = overwrite same-Id + same-name files; false = current behavior
+            var overwriteDuplicates = false; // true = overwrite same-Id + same-name files; false = current behavior
 
             foreach (var res in embeddedModels)
             {

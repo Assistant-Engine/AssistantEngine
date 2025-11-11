@@ -9,6 +9,7 @@
         </dt>
         <dd class="d-flex align-items-center context-op-inner">
             <InputTextArea @bind-Value="AssistantConfig.SystemPrompt"
+                           @oninput="(_) => MarkDirty?.Invoke()"
                            class="form-control mot2" placeholder="Enter your assistant's instructions here (e.g., 'You're a helpful assistant that uses RAG and Text-to-SQL...')" />
         </dd>
 

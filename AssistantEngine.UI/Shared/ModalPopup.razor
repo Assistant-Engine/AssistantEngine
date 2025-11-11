@@ -14,6 +14,11 @@
                     @_content
                 </div>
                 <div class="modal-footer">
+                    @if (Modal.IsConfirmActive)
+                    {
+                        <button class="btn btn-danger btn-default" @onclick="() => { Modal.ResolveConfirm(true); Modal.Close(); }">@Modal.ConfirmOkText</button>
+                        <button class="btn btn-outline-secondary btn-default" @onclick="() => { Modal.ResolveConfirm(false); Modal.Close(); }">@Modal.ConfirmCancelText</button>
+                    }
                 </div>
             </div>
         </div>
