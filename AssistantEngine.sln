@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 18
-VisualStudioVersion = 18.0.11123.170 d18.0
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36401.2 d17.14
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
@@ -18,8 +18,6 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantEngine.UI", "AssistantEngine.UI\AssistantEngine.UI.csproj", "{96A4B147-F840-2C5C-579E-C260BF8B8B05}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantEngine.Web", "AssistantEngine.Web\AssistantEngine.Web.csproj", "{5F43337E-75A7-9278-9705-E2167EA4003B}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AssistantEngine.Console", "AssistantEngine.Console\AssistantEngine.Console.csproj", "{3365360F-5A4B-4495-A645-31F493258F3A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -66,18 +64,6 @@ Global
 		{5F43337E-75A7-9278-9705-E2167EA4003B}.ReleaseLocal|Any CPU.Build.0 = Release|Any CPU
 		{5F43337E-75A7-9278-9705-E2167EA4003B}.ReleaseLocal|x64.ActiveCfg = Release|Any CPU
 		{5F43337E-75A7-9278-9705-E2167EA4003B}.ReleaseLocal|x64.Build.0 = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Debug|x64.Build.0 = Debug|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|Any CPU.Build.0 = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|x64.ActiveCfg = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.Release|x64.Build.0 = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.ReleaseLocal|Any CPU.ActiveCfg = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.ReleaseLocal|Any CPU.Build.0 = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.ReleaseLocal|x64.ActiveCfg = Release|Any CPU
-		{3365360F-5A4B-4495-A645-31F493258F3A}.ReleaseLocal|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

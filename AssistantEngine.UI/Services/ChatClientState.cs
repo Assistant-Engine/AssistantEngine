@@ -260,6 +260,51 @@ namespace AssistantEngine.Factories
             await _repo.SaveAsync(Session, ct);
             _lastFlush = now;
         }
+        /// <summary>
+        /// method for external libraries maintaining chat statae
+        /// </summary>
+        /// <param name="messages"></param>
+        /// <param name="chatOptions"></param>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public async Task<ChatResponse> GetChatResponseAsync(
+    List<ChatMessage> messages,
+    ChatOptions chatOptions = null,
+    CancellationToken cancellationToken = default)
+        {
+            var chatOpsToUse = chatOptions == null ? ChatOptions : chatOptions;
+       
+            var start = DateTime.UtcNow;
+            var mergedAdditional = new Microsoft.Extensions.AI.AdditionalPropertiesDictionary();
+
+            // will throw for cancellation / failures to caller
+            var chatResponse = await Client.GetResponseAsync(messages, chatOpsToUse, cancellationToken).ConfigureAwait(false);
+             
+            if (chatResponse?.AdditionalProperties != null)
+                foreach (var kv in chatResponse.AdditionalProperties)
+                    mergedAdditional[kv.Key] = kv.Value;
+
+            chatResponse.AdditionalProperties ??= new();
+            foreach (var kv in mergedAdditional)
+                chatResponse.AdditionalProperties[kv.Key] = kv.Value;
+
+            // timings: for non-streaming treat total as load
+            var finish = DateTime.UtcNow;
+            var totalAll = finish - start;
+            chatResponse.AdditionalProperties["total_duration_all"] = totalAll;
+            chatResponse.AdditionalProperties["load_duration"] = totalAll;
+            chatResponse.AdditionalProperties["eval_duration"] = TimeSpan.Zero;
+            chatResponse.AdditionalProperties["total_duration"] = TimeSpan.Zero;
+            chatResponse.AdditionalProperties["tool_duration"] = TimeSpan.Zero;
+            ChatResponse = chatResponse;
+            Session.Messages.Add(chatResponse.Messages.Last());
+
+            await FlushAsync(force: true);
+
+            if (Session.DefaultTitle())
+                _ = SetTitleAsync();
+            return chatResponse;
+        }
 
         public async Task StartAgentRunAsync()
         {
