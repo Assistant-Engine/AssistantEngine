@@ -260,18 +260,21 @@ namespace AssistantEngine.Factories
             await _repo.SaveAsync(Session, ct);
             _lastFlush = now;
         }
-        /// <summary>
-        /// method for external libraries maintaining chat statae
-        /// </summary>
-        /// <param name="messages"></param>
-        /// <param name="chatOptions"></param>
-        /// <param name="cancellationToken"></param>
-        /// <returns></returns>
-        public async Task<ChatResponse> GetChatResponseAsync(
-    List<ChatMessage> messages,
-    ChatOptions chatOptions = null,
-    CancellationToken cancellationToken = default)
+   /// <summary>
+   /// method for external libraries maintaining chat state
+   /// </summary>
+   /// <param name="messages"></param>
+   /// <param name="chatOptions"></param>
+   /// <param name="cancellationToken"></param>
+   /// <param name="newStream">whether to use new messages or not</param>
+   /// <returns></returns>
+        public async Task<ChatResponse> GetChatResponseAsync(List<ChatMessage> messages,ChatOptions chatOptions = null,CancellationToken cancellationToken = default, bool newStream = true, bool setTitle = false)
         {
+            if(newStream)
+            {
+                Messages.Clear();
+            }
+            Messages.AddRange(messages);
             var chatOpsToUse = chatOptions == null ? ChatOptions : chatOptions;
        
             var start = DateTime.UtcNow;
@@ -287,25 +290,31 @@ namespace AssistantEngine.Factories
             chatResponse.AdditionalProperties ??= new();
             foreach (var kv in mergedAdditional)
                 chatResponse.AdditionalProperties[kv.Key] = kv.Value;
-
-            // timings: for non-streaming treat total as load
             var finish = DateTime.UtcNow;
             var totalAll = finish - start;
-            chatResponse.AdditionalProperties["total_duration_all"] = totalAll;
-            chatResponse.AdditionalProperties["load_duration"] = totalAll;
-            chatResponse.AdditionalProperties["eval_duration"] = TimeSpan.Zero;
-            chatResponse.AdditionalProperties["total_duration"] = TimeSpan.Zero;
-            chatResponse.AdditionalProperties["tool_duration"] = TimeSpan.Zero;
             ChatResponse = chatResponse;
-            Session.Messages.Add(chatResponse.Messages.Last());
-
+            Messages.AddMessages(chatResponse);
             await FlushAsync(force: true);
 
-            if (Session.DefaultTitle())
+            if (Session.DefaultTitle() && setTitle)
                 _ = SetTitleAsync();
             return chatResponse;
         }
 
+        public async Task<ChatResponse> GetChatResponseAsync(ChatMessage userMsg)
+        {
+            var o = _health.Get(HealthDomain.Ollama);
+            if (o.Level != HealthLevel.Healthy)
+            {
+                StatusMessage(o.Error ?? "Ollama not reachable.", StatusLevel.Error);
+                return null;
+            }
+
+            _runCts?.Cancel();
+            Messages.Add(userMsg);
+            IsLoading = true;
+            return await GetChatResponseAsync(Filter(Messages));
+        }
         public async Task StartAgentRunAsync()
         {
             _runCts?.Dispose();
