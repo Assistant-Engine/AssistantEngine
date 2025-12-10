@@ -49,6 +49,10 @@ public sealed class EvaluationSchedulerService : BackgroundService
 
             await foreach (var eval in _store.DueAsync(now, stoppingToken))
             {
+                // Skip disabled or paused evaluations
+                if (eval.State == EvalState.Disabled || eval.State == EvalState.Paused)
+                    continue;
+
                 if (eval.ExpiresUtc is { } exp && now > exp)
                 {
                     eval.State = EvalState.Completed;
